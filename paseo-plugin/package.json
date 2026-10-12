@@ -11,7 +11,7 @@
     "directory": "paseo-plugin"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "files": [
     "paseo-plugin.json",

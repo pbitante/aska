@@ -523,7 +523,7 @@ not allowed, so panel judgments are unchanged.
 
 ## Development
 
-You need Node 20 or later. Run these from `panel/`: `npm ci` installs the tools, and `npm run check` runs the
+You need Node 22 or later. Run these from `panel/`: `npm ci` installs the tools, and `npm run check` runs the
 typecheck, the tests, a smoke test of the bundled CLI, and the build. The CLI's TypeScript
 lives in `src/`; `skills/operator/scripts/persona.mjs` is built from it by `npm run build` and
 committed, so the plugin works without an install step. Rebuild and commit it with any change
