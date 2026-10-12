@@ -1,0 +1,895 @@
+{
+  "question": "Should the aska 0.3.0 change (show/save/patch/delete authoring commands, squash commit b1511b8 on main) ship as is?",
+  "panel": "aska:code",
+  "verdicts": [
+    {
+      "persona": "aska:guardian",
+      "status": "ok",
+      "verdict": "proceed-with-conditions",
+      "reason": null
+    },
+    {
+      "persona": "aska:tester",
+      "status": "ok",
+      "verdict": "proceed-with-conditions",
+      "reason": null
+    },
+    {
+      "persona": "aska:red-team",
+      "status": "ok",
+      "verdict": "proceed-with-conditions",
+      "reason": null
+    },
+    {
+      "persona": "aska:maintainer",
+      "status": "ok",
+      "verdict": "proceed-with-conditions",
+      "reason": null
+    },
+    {
+      "persona": "aska:historian",
+      "status": "ok",
+      "verdict": "proceed-with-conditions",
+      "reason": null
+    }
+  ],
+  "units": [
+    {
+      "unit": "aska:commit-history",
+      "class": "single-voice",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "medium",
+          "claim": "As shipped, main delivers four independent commands, the hardening pass and the 0.3.0 bump in one 2,039-line commit, so none of them can be bisected or reverted on its own. A verified, passing six-step replacement now exists, which makes the fix a ref move.",
+          "why": null
+        }
+      ]
+    },
+    {
+      "unit": "aska:cost",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold medium)"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:data-integrity",
+      "class": "all-flag",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "medium",
+          "claim": "save and patch write through a symlinked target to whatever file it points to, even outside the scope root, and say nothing about it. The output path is the link, so neither the user nor a host can tell that an unrelated file was overwritten. A dangling link is silently replaced by a regular file, so the edit lands somewhere other than where the user's setup expects. The commit calls the writes 'symlink-safe', which overstates what ships.",
+          "why": null
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "secondary",
+          "status": "flagged",
+          "severity": "low",
+          "claim": "CONFIRMED (evidence B5): save silently replaces a file the user made read-only and resets its mode, because temp-file-plus-rename only needs write access to the directory.",
+          "why": null
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:delivery-speed",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "deprioritized",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold critical)"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "deprioritized",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold critical)"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "deprioritized",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold critical)"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:dependencies",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:edge-cases",
+      "class": "split",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "low",
+          "claim": "Deleting a project-scope file that shadows a same-named user or plugin file, or saving a new project file that shadows one, silently changes which definition is active. Nothing breaks, so delete reports no dependents and just goes ahead.",
+          "why": null
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "medium",
+          "claim": "Patch has no defined handling for files written on Windows or by editors that add a BOM. Any patch, including an empty one, silently converts the whole file to LF without a BOM and reformats unusual but valid yaml in keys the patch didn't touch. It also writes even when nothing changed.",
+          "why": null
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "deprioritized",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold critical)"
+        }
+      ]
+    },
+    {
+      "unit": "aska:llm-behavior",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold low)"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:maintainability",
+      "class": "split",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "medium",
+          "claim": "patch's documented contract ('keeping everything it doesn't touch' in the README and operator skill, and 'byte-for-byte' in the commit message) only holds for files already in the yaml library's canonical style. Any patch, even an empty one, rewrites a CRLF or BOM file in full and re-indents unindented sequences and comment spacing. Someone who later relies on the documented guarantee, such as an editor diffing before and after or a user on Windows line endings, will be surprised, and no test marks where the guarantee stops.",
+          "why": null
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "deprioritized",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold critical)"
+        }
+      ]
+    },
+    {
+      "unit": "aska:observability",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold medium)"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:performance",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold medium)"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:privacy",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:rollback-safety",
+      "class": "split",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "medium",
+          "claim": "delete cannot be undone and cannot be guarded against a stale view. It hard-deletes with rmSync, keeps no backup, and rejects --expect-hash, so a host can delete a file that was edited after it last showed it. With --force it also deletes a file that other files depend on.",
+          "why": null
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold high)"
+        }
+      ]
+    },
+    {
+      "unit": "aska:scope-creep",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold medium)"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold medium)"
+        }
+      ]
+    },
+    {
+      "unit": "aska:security",
+      "class": "all-flag",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "medium",
+          "claim": "CONFIRMED (evidence B1): save and patch follow a symlinked target to wherever it points, with no containment check, and report only the link path. A cloned or otherwise untrusted repo can therefore turn a routine persona edit into a silent overwrite of any file the user can write.",
+          "why": null
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "medium",
+          "claim": "The write-through-symlink gap is now confirmed. A project-scope save or patch whose target is a symlink to a file outside the project overwrites that outside file with persona markdown. It reports written: true with no diagnostic, and the result names only the link path, so nobody can tell that a file outside the scope was replaced. A cloned, untrusted repo can plant such a link under .claude/personas/. Two related write-path facts make the same point: a dangling target link is silently replaced by a regular file, and a deliberately read-only (444) file is replaced and comes back 664.",
+          "why": null
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:test-evidence",
+      "class": "single-voice",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "medium",
+          "claim": "The commit message says patch keeps 'comments, key order and untouched content byte-for-byte'. The tests only prove this for an empty patch on files already in canonical yaml style, and evidence C shows the claim is false outside that case. Earlier I said this claim was unproven. Evidence C shows it is actually wrong, so I'm keeping the finding and making it firmer.",
+          "why": null
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:user-value",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:guardian",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold high)"
+        },
+        {
+          "persona": "aska:tester",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:red-team",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:maintainer",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:historian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    }
+  ],
+  "outsideScope": [],
+  "merged": {
+    "conditions": [
+      {
+        "persona": "aska:guardian",
+        "text": "Before a host (the Paseo editor) exposes save or patch, stop silent write-through to symlink targets outside the scope: resolve the target, refuse with a diagnostic (or require an explicit opt-in) when its realpath is outside the scope root, and always report the resolved path in the output. Fix the dangling-link case so it either refuses or creates the link's target, instead of replacing the link with a regular file. Until then, drop 'symlink-safe ... writes' from the release notes."
+      },
+      {
+        "persona": "aska:guardian",
+        "text": "Before a host exposes delete, make it recoverable or race-safe: accept --expect-hash on delete (refuse with E_STALE if the file changed since show), and/or move the file to a backup or trash location instead of calling rmSync, and report that location."
+      },
+      {
+        "persona": "aska:guardian",
+        "text": "Every host caller (the Paseo editor, and the operator skill's guidance) must always pass --expect-hash from show, or 'none' when creating. Without it, save and patch silently overwrite edits made elsewhere."
+      },
+      {
+        "persona": "aska:tester",
+        "text": "Add a save (or checkInPlace) test where another file in the library already has an error before the save. Assert that saving an unrelated valid file still exits 0 with written: true and no diagnostic for that file, and that a new error in the file being saved still blocks the write. No test currently proves the baseline comparison the commit message claims."
+      },
+      {
+        "persona": "aska:tester",
+        "text": "Make the patch claim match what the code does. Either keep line endings and the BOM and skip the write when a patch changes nothing, proving it with byte-exact tests on a CRLF+BOM file and on a file with unindented sequences; or narrow the claim in the README, the operator skill and the commit message (the squash is being rebuilt anyway, per evidence D) to 'files already in the yaml library's canonical style'. In both cases, add one non-empty patch test that compares the whole result to the expected text with toBe."
+      },
+      {
+        "persona": "aska:red-team",
+        "text": "Bound the symlink write-through in writeAtomic (src/author/files.ts). Before save or patch writes through a symlinked target in the project scope, check that realpath(target) is inside realpath(scope root). If it isn't, refuse with E_WRITE and a hint that names the real path. For the user scope, allow targets under the user's home so dotfile managers (stow, home-manager, chezmoi) keep working. Add a regression test that reproduces evidence B1 and expects a refusal."
+      },
+      {
+        "persona": "aska:red-team",
+        "text": "Report the resolved path in save and patch output (for example a `realPath` field in --json, and `wrote <link> -> <real>` in text) whenever it differs from the link path, so a redirected write is never silent."
+      },
+      {
+        "persona": "aska:red-team",
+        "text": "Correct the commit or release wording before this history is published or rewritten. 'symlink-safe staging and writes' in b1511b8, and the historian's proposed subject 'keep save, patch and delete inside their scope and off symlink targets' (evidence D, commit c4da82b), both claim a containment that evidence B1 shows does not exist."
+      },
+      {
+        "persona": "aska:maintainer",
+        "text": "In project scope, refuse a save or patch whose target is a symlink that resolves outside the project root (keep following links in user scope for dotfiles setups), and report the real path written alongside the link path in the result. Add a test that plants a link to a file outside the project and expects a refusal."
+      },
+      {
+        "persona": "aska:maintainer",
+        "text": "Make patch keep the file's BOM and line endings and skip the write when the result is byte-identical. If that isn't done in this release, change the README and operator-skill wording 'keeping everything it doesn't touch' to say which formatting is normalised (CRLF, BOM, sequence indent, comment spacing), and add a test that pins the chosen behaviour."
+      },
+      {
+        "persona": "aska:historian",
+        "text": "Replace b1511b8 on main with the six-commit history, not the single squash. Branch history-rebuild (fae22de..7e25d4b, based on 7532256) already holds it: each commit passes `npm run check`, and `git diff b1511b8 history-rebuild` is empty (evidence D). `git remote -v` is still empty, so main has never been pushed and the swap is only a ref move."
+      },
+      {
+        "persona": "aska:historian",
+        "text": "Before moving main, reword three of the rebuilt messages (6fd3770 patch, 04f911a delete, c4da82b harden) as shown under 'Proposed history', so no message claims what evidence B and C disprove. That includes withdrawing the subject I proposed in round one, 'harden: keep save, patch and delete inside their scope and off symlink targets'."
+      },
+      {
+        "persona": "aska:historian",
+        "text": "Land any fix for the symlink write-through (B1), dangling-target replacement (B3), mode reset (B5) or CRLF/BOM rewriting (C) as new `fix:` commits on top. Do not amend them into the rebuilt commits: each is a behaviour change worth bisecting and reverting on its own."
+      }
+    ],
+    "missing": [],
+    "investigate": [
+      {
+        "persona": "aska:red-team",
+        "what": "Repeat evidence B4 (a directory symlink inside personas/, pointing at an ancestor and at a large folder outside the project) under Node 20 and Node 22, the other versions package.json `engines: node >=20` allows, and check whether checkInPlace's `cpSync(src, dst, { recursive: true, dereference: true })` follows the nested directory links.",
+        "why": "I withdrew my earlier low finding (that staging could copy a home-sized tree into /tmp) because B4 showed Node 24 copied 0 files and kept the nested links as links. The evidence itself notes the code doesn't guarantee that. If an older supported Node dereferences nested links, the finding comes back.",
+        "tools": [
+          "Bash with node 20 and node 22 (nvm or similar) running skills/operator/scripts/persona.mjs"
+        ]
+      },
+      {
+        "persona": "aska:red-team",
+        "what": "Reproduce the `show` read-through: plant `personas/leak.unit.md -> <scratch secret file>` in a scratch project, run `show unit leak --scope project --json`, and confirm `raw` contains the secret file's bytes.",
+        "why": "This confirms the low security finding on show end to end. The new evidence covered writes through links, but not reads.",
+        "tools": [
+          "Bash (node skills/operator/scripts/persona.mjs)"
+        ]
+      },
+      {
+        "persona": "aska:maintainer",
+        "what": "Repeat the staging probe from evidence B2 and B4 (a dangling ghost.unit.md, a directory link to an ancestor, a directory link to a large outside folder, then save, patch and delete) on Node 20 and Node 22, the oldest versions package.json engines '>=20' allows.",
+        "why": "I withdrew my round-1 observability finding because Node 24's cpSync (src/author/check.ts:58, recursive + dereference) kept nested links as links and didn't throw. The evidence notes that the code itself doesn't guarantee this. If an older Node follows or throws on those links, every write in the scope fails with the misleading E_WRITE 'Check permissions on <dir>' (files.ts:54-57), and the finding comes back.",
+        "tools": [
+          "shell with Node 20 and 22 (nvm or similar) in a throwaway directory"
+        ]
+      }
+    ],
+    "sections": [
+      {
+        "persona": "aska:historian",
+        "name": "Proposed history",
+        "text": "pick dea59e4 feat: persona show prints one unit, persona or panel file as data\n    (message as in rebuilt fae22de, unchanged)\n    aska can read but not write persona files; a form editor (the Paseo\n    editor first) needs to round-trip them without its own copy of the\n    file-format knowledge. show prints one file as data: fields as\n    written, sections, raw text and a sha256 hash for optimistic\n    concurrency. Spec: docs/specs/2026-10-09-aska-cli-authoring-design.md.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n\npick 1dc4080 feat: persona save checks a whole file as if in place, then writes it\n    (message as in rebuilt be99962, unchanged)\n    So that no command ever writes a file that fails validation: the\n    candidate is checked against a staged copy of the scope, breakage in\n    dependent files is reported at their real paths, and the write is\n    refused on errors. E_NAME_MISMATCH points at the name field's real\n    line.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nfixup 0024fac fix: pin E_NAME_MISMATCH to the name field's real line, add primary_order coverage\n\nreword 68134ae feat: persona patch applies form edits through the yaml Document API\n    Editors edit fields, not files: patch applies set/unset/sections to\n    the parsed document so comments and key order survive, and a file\n    already in the yaml library's default style round-trips byte for\n    byte outside the edited keys. Files with CRLF, a BOM, unindented\n    sequences or extra comment spacing are re-serialised as a whole.\n    A broken existing file is reported as a diagnostic, not a crash,\n    and extends is ref-validated like every other reference.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nfixup 62e6a7b fix: patch reports a broken existing file as a diagnostic, not a crash or usage error\n\nreword 96c946c feat: persona delete lists what would break and needs --force to break it\n    So an editor can't silently orphan the personas and panels that\n    extend or reference a file: delete reports every dependent that\n    would break and refuses unless --force is given.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n\nreword ffbe6b4 fix: reject path-like names, report fs errors and keep symlinks on save/patch/delete\n    save, patch and delete now require kebab-case names (show still\n    takes a ref), so a path-like name can no longer reach outside its\n    scope. Filesystem errors during staging, write and delete come back\n    as an E_WRITE diagnostic through the normal JSON/exit-1 path instead\n    of a crash. The in-place check stages real files rather than links,\n    so a refused write never touches a symlink's target, and a\n    successful write goes through an existing symlink to its target so\n    the link is kept. The target is not checked to lie inside the scope.\n    Also: a missing patched section is appended under its canonical\n    heading, patch rejects section text containing a \"## \" heading line\n    (exit 2, use save), and delete's children-dependents case and\n    W_DROPPED_SETTINGS's --json path are covered by tests.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n\npick 71eb591 docs: document show, save, patch and delete; aska 0.3.0\n\nNotes:\n- This is the round-one plan, already built and verified as history-rebuild (evidence D). The only changes are the three rewords above (68134ae, 96c946c, ffbe6b4); show, save and docs keep their rebuilt messages. Rewording leaves every tree unchanged, so the per-commit `npm run check` passes from D still hold.\n- I withdraw my round-one subject for ffbe6b4 ('harden: keep save, patch and delete inside their scope and off symlink targets'): evidence B1 shows writes do leave the scope through a symlink.\n- Keep ffbe6b4 as its own commit rather than folding it into the feat commits. It is the step a fix for B1/B3/B5 will build on and may need to revert or bisect against (rollback-safety tie-break).\n- 71eb591 moves after ffbe6b4 with no conflict (verified in D), so the 0.3.0 bump is the last step.\n- Any fix for B1, B3, B5 or C goes on top as new fix: commits, not into this list."
+      }
+    ]
+  },
+  "followUps": [
+    {
+      "type": "investigate",
+      "persona": "aska:red-team",
+      "what": "Repeat evidence B4 (a directory symlink inside personas/, pointing at an ancestor and at a large folder outside the project) under Node 20 and Node 22, the other versions package.json `engines: node >=20` allows, and check whether checkInPlace's `cpSync(src, dst, { recursive: true, dereference: true })` follows the nested directory links.",
+      "why": "I withdrew my earlier low finding (that staging could copy a home-sized tree into /tmp) because B4 showed Node 24 copied 0 files and kept the nested links as links. The evidence itself notes the code doesn't guarantee that. If an older supported Node dereferences nested links, the finding comes back.",
+      "tools": [
+        "Bash with node 20 and node 22 (nvm or similar) running skills/operator/scripts/persona.mjs"
+      ]
+    },
+    {
+      "type": "investigate",
+      "persona": "aska:red-team",
+      "what": "Reproduce the `show` read-through: plant `personas/leak.unit.md -> <scratch secret file>` in a scratch project, run `show unit leak --scope project --json`, and confirm `raw` contains the secret file's bytes.",
+      "why": "This confirms the low security finding on show end to end. The new evidence covered writes through links, but not reads.",
+      "tools": [
+        "Bash (node skills/operator/scripts/persona.mjs)"
+      ]
+    },
+    {
+      "type": "investigate",
+      "persona": "aska:maintainer",
+      "what": "Repeat the staging probe from evidence B2 and B4 (a dangling ghost.unit.md, a directory link to an ancestor, a directory link to a large outside folder, then save, patch and delete) on Node 20 and Node 22, the oldest versions package.json engines '>=20' allows.",
+      "why": "I withdrew my round-1 observability finding because Node 24's cpSync (src/author/check.ts:58, recursive + dereference) kept nested links as links and didn't throw. The evidence notes that the code itself doesn't guarantee this. If an older Node follows or throws on those links, every write in the scope fails with the misleading E_WRITE 'Check permissions on <dir>' (files.ts:54-57), and the finding comes back.",
+      "tools": [
+        "shell with Node 20 and 22 (nvm or similar) in a throwaway directory"
+      ]
+    }
+  ],
+  "ok": true
+}

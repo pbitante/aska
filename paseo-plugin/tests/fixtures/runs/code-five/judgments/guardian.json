@@ -1,0 +1,53 @@
+{
+  "persona": "aska:guardian",
+  "verdict": "proceed-with-conditions",
+  "conditions": [
+    "Make delete recoverable or race-safe before a host (the Paseo editor) exposes it: accept --expect-hash on delete (refuse with E_STALE if the file changed since show), and/or move the file to a backup or trash location instead of rmSync.",
+    "Have every host caller (the Paseo editor, and the operator skill's guidance) always pass --expect-hash from show, or 'none' when creating. Without it, save and patch silently overwrite edits made elsewhere."
+  ],
+  "findings": [
+    {
+      "unit": "aska:rollback-safety",
+      "severity": "medium",
+      "claim": "delete cannot be undone and cannot be guarded against a stale view. It hard-deletes with rmSync, keeps no backup, and rejects --expect-hash, so a host can delete a file that was edited after it last showed it. With --force it also deletes a file that other files depend on.",
+      "evidence": "src/cli/author.ts:306-307 calls rmSync(path) directly. src/cli/main.ts parseArgv rejects --expect-hash for delete ('--expect-hash is only accepted by save and patch'), and tests/cli/author.test.ts:442 locks that in. User-scope files (~/.claude/personas) are usually not under version control, so git cannot recover them. The spec (A5, and the delete row in the command table) applies optimistic concurrency only to save and patch.",
+      "suggestion": "Accept --expect-hash on delete with the same staleCheck. Before removing the file, copy it to something like <scope>/personas/.trash/ or a tmp backup, and report that location in the JSON output, so an accidental delete or a --force delete can be restored in one step."
+    },
+    {
+      "unit": "aska:data-integrity",
+      "severity": "low",
+      "claim": "patch does not keep untouched content byte-for-byte for every file, even though the commit says it does. It rewrites the whole file: CRLF line endings become LF, a BOM is stripped, and the frontmatter is re-serialized by yaml's Document.toString, which can change formatting nobody asked to change (for example, sequence indentation or a document marker).",
+      "evidence": "src/author/patch.ts:140 runs normalizeSource(base), which strips the BOM and replaces \\r\\n with \\n (src/parse/frontmatter.ts:11-12). The body comes from fm.body, which is also normalized. patch.ts:185 rebuilds the frontmatter with doc.toString({ lineWidth: 0, flowCollectionPadding: false }). The only byte-identity test (tests/author/patch.test.ts:67) uses an empty patch on the shipped files, which are LF and formatted the way yaml writes them. Replacing units.<tier> with createNode (patch.ts:163) also drops any comments inside that tier's list.",
+      "suggestion": "Detect the original line ending and BOM and restore them on output. Add a patch test with a CRLF file and a hand-formatted frontmatter (non-indented sequence, comments inside a tier list), or narrow the 'byte-for-byte' claim in the docs."
+    },
+    {
+      "unit": "aska:data-integrity",
+      "severity": "low",
+      "claim": "Without --expect-hash, save and patch are last-writer-wins, and a concurrent edit is lost with no signal. Even with it, nothing locks the file between the stale check and the rename. The atomic replace also resets the file's mode and ownership and never calls fsync.",
+      "evidence": "src/author/files.ts:61-62: staleCheck returns undefined when expectHash is undefined. author.ts:210-230: stale check, then a full-scope checkInPlace copy, then writeAtomic. That window is not locked. files.ts:44-47 uses writeFileSync(tmp) plus renameSync with no fsync and no chmod to the original mode. README/SKILL.md describe --expect-hash as optional.",
+      "suggestion": "Make the editor host always send --expect-hash. Optionally, re-check the hash immediately before renameSync, and copy the original file's mode onto the tmp file."
+    },
+    {
+      "unit": "aska:edge-cases",
+      "severity": "low",
+      "claim": "Deleting a project-scope file that shadows a same-named user or plugin file, or saving a new project file that shadows one, silently changes which definition is active. Nothing breaks, so delete reports no dependents and just goes ahead.",
+      "evidence": "src/author/check.ts:150-152: broken only collects new error-level diagnostics. Un-shadowing a lower-scope persona or unit produces no error, so del() (author.ts:305) deletes it without a note. The tests cover dependents breaking, but not a resolution silently switching to another scope.",
+      "suggestion": "In delete and save, compare reg.lookup(kind, name) before and after the change, and emit a warning such as W_UNSHADOWED or W_SHADOWS that names the definition which becomes active."
+    }
+  ],
+  "cleared": [],
+  "not_applicable": [],
+  "sections": {},
+  "investigate": [
+    {
+      "what": "Run patch with an empty or trivial set on a CRLF file with a BOM, and on a frontmatter that uses non-indented sequences and comments inside units.primary, then diff the result against the input.",
+      "why": "Confirms how much untouched content patch rewrites. That matters for files under git in project scope, where the rewrite would show up as noisy diffs.",
+      "tools": ["Bash (node/tsx in a scratch directory)"]
+    },
+    {
+      "what": "Confirm that skills/operator/scripts/persona.mjs, the bundled build, matches src/ at b1511b8. For example, rebuild it and diff, or check whether a test verifies it.",
+      "why": "The skill runs the bundle, not src. If it is stale, the safety fixes in ffbe6b4 (symlink staging, kebab-case names, E_WRITE) would not be what users run.",
+      "tools": ["Bash (npm run build, git diff)"]
+    }
+  ]
+}

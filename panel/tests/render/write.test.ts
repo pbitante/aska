@@ -1,0 +1,304 @@
+import { accessSync, chmodSync, constants, existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { resolvePersona } from '../../src/resolve/resolve';
+import { chooseScope, findStaleRenders, planRender, writePlan } from '../../src/render/write';
+import { Registry } from '../../src/scopes/registry';
+import { exampleFiles, resolveExample } from '../helpers/example';
+import { personaMd } from '../helpers/md';
+
+const targetsFor = (root: string) => ({ projectClaudeDir: join(root, 'proj/.claude'), userClaudeDir: join(root, 'home/.claude') });
+
+function canDenyWriteAccess(): boolean {
+  const dir = mkdtempSync(join(tmpdir(), 'write-perm-check-'));
+  chmodSync(dir, 0o500);
+  let denied = false;
+  try {
+    writeFileSync(join(dir, 'f'), 'x');
+  } catch {
+    denied = true;
+  }
+  chmodSync(dir, 0o700);
+  rmSync(dir, { recursive: true, force: true });
+  return denied;
+}
+const canRestrictWriteAccess = canDenyWriteAccess();
+
+function canDenyReadAccess(): boolean {
+  const dir = mkdtempSync(join(tmpdir(), 'read-perm-check-'));
+  const f = join(dir, 'f');
+  writeFileSync(f, 'x');
+  chmodSync(f, 0o000);
+  let denied = false;
+  try {
+    accessSync(f, constants.R_OK);
+  } catch {
+    denied = true;
+  }
+  chmodSync(f, 0o644);
+  rmSync(dir, { recursive: true, force: true });
+  return denied;
+}
+const canRestrictPermissions = canDenyReadAccess();
+
+describe('chooseScope', () => {
+  it('defaults to the most specific input scope and refuses less specific targets', () => {
+    const { effective } = resolveExample();
+    expect(chooseScope(effective).scope).toBe('project');
+    expect(chooseScope(effective, 'user').diagnostic!.code).toBe('E_RENDER_SCOPE');
+  });
+
+  it('renders plugin-only personas to user scope by default', () => {
+    const files = { ...exampleFiles(), 'acme/personas/rev.md': personaMd(['name: rev', 'description: Rev.', 'units:', '  primary: [cost]']) };
+    const { effective } = resolveExample(files, 'acme:rev');
+    expect(effective.inputScopes).toEqual(['plugin']);
+    expect(chooseScope(effective).scope).toBe('user');
+    expect(chooseScope(effective, 'project').scope).toBe('project');
+  });
+
+  it('defaults to user scope for a persona with user and plugin inputs but no project inputs', () => {
+    const files = { ...exampleFiles(), 'user/personas/mix.md': personaMd(['name: mix', 'description: Mix.', 'extends: base', 'units:', '  secondary: [acme:cost]']) };
+    const { effective } = resolveExample(files, 'mix');
+    expect([...effective.inputScopes].sort()).toEqual(['plugin', 'user']);
+    expect(chooseScope(effective).scope).toBe('user');
+  });
+
+  it('never plans a path under a plugin scope root', () => {
+    const files = { ...exampleFiles(), 'acme/personas/rev.md': personaMd(['name: rev', 'description: Rev.', 'units:', '  primary: [cost]']) };
+    const { effective, root, scopes } = resolveExample(files, 'acme:rev');
+    const pluginRoots = scopes.filter((s) => s.kind === 'plugin').map((s) => s.root);
+    expect(pluginRoots.length).toBeGreaterThan(0);
+    for (const requested of [undefined, 'project', 'user'] as const) {
+      const { plan } = planRender(effective, targetsFor(root), requested);
+      for (const f of plan!.files) expect(pluginRoots.some((r) => f.path.startsWith(r))).toBe(false);
+    }
+  });
+});
+
+describe('writePlan', () => {
+  it('writes both files and overwrites its own earlier output with new content', () => {
+    const { effective, root } = resolveExample();
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    expect(plan.files.map((f) => f.path)).toEqual([
+      join(root, 'proj/.claude/output-styles/example.persona.md'),
+      join(root, 'proj/.claude/agents/example.persona.md'),
+    ]);
+    expect(writePlan(plan)).toEqual([]);
+
+    const source = join(root, 'proj/.claude/personas/example.persona.md');
+    writeFileSync(source, readFileSync(source, 'utf8').replace('Skeptical', 'Wary'));
+    const next = planRender(effective, targetsFor(root)).plan!;
+    expect(next.files[0]!.content).not.toBe(plan.files[0]!.content);
+
+    expect(writePlan(next)).toEqual([]);
+    expect(readFileSync(next.files[0]!.path, 'utf8')).toBe(next.files[0]!.content);
+    expect(readFileSync(next.files[1]!.path, 'utf8')).toBe(next.files[1]!.content);
+  });
+
+  it('refuses a planted symlink to a user-scope generated file, and leaves that file alone', () => {
+    // A cloned repo ships .claude/agents/<x>.persona.md as a symlink to the user's own generated
+    // subagent; rendering the project persona must not overwrite the user's file through it.
+    const { effective, root } = resolveExample();
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    // A generated (marked) file in the user scope, standing in for one of the user's own renders.
+    const userAgent = join(root, 'home/.claude/agents/mine.persona.md');
+    mkdirSync(dirname(userAgent), { recursive: true });
+    writeFileSync(userAgent, plan.files[1]!.content.replace('example', 'mine'), { mode: 0o600 });
+    const before = readFileSync(userAgent, 'utf8');
+
+    mkdirSync(dirname(plan.files[1]!.path), { recursive: true });
+    symlinkSync(userAgent, plan.files[1]!.path);
+    const ds = writePlan(plan);
+    expect(ds.map((d) => d.code)).toEqual(['E_RENDER_SYMLINK']);
+    expect(ds[0]!.loc?.file).toBe(plan.files[1]!.path);
+    expect(readFileSync(userAgent, 'utf8')).toBe(before);
+    expect(statSync(userAgent).mode & 0o777).toBe(0o600);
+    expect(existsSync(plan.files[0]!.path)).toBe(false);
+  });
+
+  it('refuses a dangling symlink at a target path too, writing nothing', () => {
+    const { effective, root } = resolveExample();
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    mkdirSync(dirname(plan.files[0]!.path), { recursive: true });
+    symlinkSync(join(root, 'nowhere/x.md'), plan.files[0]!.path);
+    expect(writePlan(plan).map((d) => d.code)).toEqual(['E_RENDER_SYMLINK']);
+    expect(lstatSync(plan.files[0]!.path).isSymbolicLink()).toBe(true);
+    expect(existsSync(join(root, 'nowhere'))).toBe(false);
+  });
+
+  it('refuses to overwrite a hand-written file and writes nothing', () => {
+    const { effective, root } = resolveExample();
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    mkdirSync(join(root, 'proj/.claude/agents'), { recursive: true });
+    writeFileSync(plan.files[1]!.path, '---\nname: mine\n---\nhand written\n');
+    const ds = writePlan(plan);
+    expect(ds.map((d) => d.code)).toEqual(['E_RENDER_UNMARKED']);
+    expect(existsSync(plan.files[0]!.path)).toBe(false);
+    expect(readFileSync(plan.files[1]!.path, 'utf8')).toContain('hand written');
+  });
+
+  it('reports a diagnostic instead of throwing when a target path is a directory', () => {
+    const { effective, root } = resolveExample();
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    mkdirSync(plan.files[1]!.path, { recursive: true });
+    const ds = writePlan(plan);
+    expect(ds.map((d) => d.code)).toEqual(['E_RENDER_UNMARKED']);
+    expect(existsSync(plan.files[0]!.path)).toBe(false);
+  });
+
+  (canRestrictWriteAccess ? it : it.skip)('reports E_WRITE instead of crashing when the target directory is not writable', () => {
+    const { effective, root } = resolveExample();
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    const blockedDir = dirname(plan.files[0]!.path);
+    mkdirSync(blockedDir, { recursive: true });
+    chmodSync(blockedDir, 0o500);
+    try {
+      const ds = writePlan(plan);
+      expect(ds.map((d) => d.code)).toEqual(['E_WRITE']);
+      expect(ds[0]!.message).toContain(plan.files[0]!.path);
+      expect(ds[0]!.fix).toBeTruthy();
+      expect(existsSync(plan.files[1]!.path)).toBe(false);
+    } finally {
+      chmodSync(blockedDir, 0o700);
+    }
+  });
+
+  (canRestrictWriteAccess ? it : it.skip)('reports which file was already written when a later write in the same plan fails', () => {
+    const { effective, root } = resolveExample();
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    const blockedDir = dirname(plan.files[1]!.path);
+    mkdirSync(blockedDir, { recursive: true });
+    chmodSync(blockedDir, 0o500);
+    try {
+      const ds = writePlan(plan);
+      expect(ds.map((d) => d.code)).toEqual(['E_WRITE']);
+      expect(ds[0]!.message).toContain(plan.files[0]!.path);
+      expect(existsSync(plan.files[0]!.path)).toBe(true);
+    } finally {
+      chmodSync(blockedDir, 0o700);
+    }
+  });
+});
+
+describe('findStaleRenders', () => {
+  it('reports out-of-date and orphaned renders, and nothing for fresh ones', () => {
+    const { effective, root, scopes } = resolveExample();
+    writePlan(planRender(effective, targetsFor(root)).plan!);
+    const resolveNow = (c: string) => resolvePersona(new Registry(scopes), c).effective;
+    expect(findStaleRenders(targetsFor(root), resolveNow)).toEqual([]);
+
+    const source = join(root, 'proj/.claude/personas/example.persona.md');
+    writeFileSync(source, readFileSync(source, 'utf8').replace('Skeptical', 'Wary'));
+    const stale = findStaleRenders(targetsFor(root), resolveNow);
+    expect(stale.map((d) => d.code)).toEqual(['W_STALE_RENDER', 'W_STALE_RENDER']);
+    expect(stale[0]!.message).toContain('out of date');
+
+    rmSync(source);
+    const orphaned = findStaleRenders(targetsFor(root), resolveNow);
+    expect(orphaned.map((d) => d.message.includes('no longer resolves'))).toEqual([true, true]);
+  });
+
+  it('reports a cross-scope shadow distinctly from a plain out-of-date render', () => {
+    const { effective, root, scopes } = resolveExample(undefined, 'base');
+    expect(effective.inputScopes).toEqual(['user']);
+    writePlan(planRender(effective, targetsFor(root)).plan!);
+    const resolveNow = (c: string) => resolvePersona(new Registry(scopes), c).effective;
+    expect(findStaleRenders(targetsFor(root), resolveNow)).toEqual([]);
+
+    writeFileSync(
+      join(root, 'proj/.claude/personas/base.persona.md'),
+      personaMd(['name: base', 'description: Shadow.', 'units:', '  primary: [scope-creep]']),
+    );
+
+    const shadowed = findStaleRenders(targetsFor(root), resolveNow);
+    expect(shadowed.map((d) => d.code)).toEqual(['W_STALE_RENDER', 'W_STALE_RENDER']);
+    expect(shadowed[0]!.message).toContain('was rendered from user/base.persona.md');
+    expect(shadowed[0]!.message).toContain('now resolves to project/base.persona.md');
+    expect(shadowed[0]!.message).not.toContain('out of date');
+    // No --scope suggestion — re-rendering with any scope
+    // resolves the *current* (shadowing) source, never the one this file came from, so the
+    // only real fix is to delete it. The hint must still name the new source.
+    expect(shadowed[0]!.fix).toContain(`Delete ${shadowed[0]!.loc!.file}`);
+    expect(shadowed[0]!.fix).toContain('now resolves to project/base.persona.md');
+    expect(shadowed[0]!.fix).not.toContain('--scope');
+  });
+
+  it('drops the --scope suggestion even when the old source was plugin-scoped', () => {
+    // A plugin-only persona always renders into the user (or project) scope — its generated
+    // file's own directory is never a plugin root. `resolvePersona` can never make a
+    // plugin-qualified canonical (e.g. "acme:rev") resolve to a different file (the colon
+    // branch in the registry bypasses scope-rank shadowing entirely), so this stubs `resolve`
+    // to simulate the "now resolves elsewhere" case a real cross-scope shadow would produce for
+    // a bare persona name, while keeping the render and the on-disk marker fully real.
+    const files = { ...exampleFiles(), 'acme/personas/rev.md': personaMd(['name: rev', 'description: Rev.', 'units:', '  primary: [cost]']) };
+    const { effective, root, scopes } = resolveExample(files, 'acme:rev');
+    expect(effective.inputScopes).toEqual(['plugin']);
+    expect(effective.sourceId).toBe('plugin:acme/rev.persona.md');
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    expect(plan.scope).toBe('user');
+    writePlan(plan);
+
+    const resolveNow = (c: string) => {
+      const p = resolvePersona(new Registry(scopes), c).effective;
+      return p && { ...p, sourceId: 'user/rev.persona.md' };
+    };
+    const shadowed = findStaleRenders(targetsFor(root), resolveNow);
+    expect(shadowed.map((d) => d.code)).toEqual(['W_STALE_RENDER', 'W_STALE_RENDER']);
+    expect(shadowed[0]!.message).toContain('was rendered from plugin:acme/rev.persona.md');
+    expect(shadowed[0]!.message).toContain('now resolves to user/rev.persona.md');
+    expect(shadowed[0]!.fix).toContain(`Delete ${shadowed[0]!.loc!.file}`);
+    expect(shadowed[0]!.fix).toContain('now resolves to user/rev.persona.md');
+    expect(shadowed[0]!.fix).not.toContain('--scope');
+  });
+
+  it('skips a directory or dangling symlink masquerading as a generated file, without reporting it', () => {
+    const { root, scopes } = resolveExample();
+    const dir = join(root, 'proj/.claude/agents');
+    mkdirSync(join(dir, 'dirlike.persona.md'), { recursive: true });
+    symlinkSync(join(dir, 'missing-target'), join(dir, 'dangling.persona.md'));
+    const resolveNow = (c: string) => resolvePersona(new Registry(scopes), c).effective;
+    expect(findStaleRenders(targetsFor(root), resolveNow)).toEqual([]);
+  });
+
+  (canRestrictPermissions ? it : it.skip)('reports an unreadable generated file as a warning, not an error', () => {
+    const { root, scopes } = resolveExample();
+    const dir = join(root, 'proj/.claude/agents');
+    const path = join(dir, 'secret.persona.md');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, 'x');
+    chmodSync(path, 0o000);
+    try {
+      const resolveNow = (c: string) => resolvePersona(new Registry(scopes), c).effective;
+      const ds = findStaleRenders(targetsFor(root), resolveNow);
+      expect(ds.map((d) => d.code)).toEqual(['W_READ']);
+      expect(ds[0]!.level).toBe('warning');
+      expect(ds[0]!.fix).toBeTruthy();
+      expect(ds[0]!.message).toContain(path);
+    } finally {
+      chmodSync(path, 0o644);
+    }
+  });
+});
+
+describe('generated names in the target folders', () => {
+  it('never overwrites or scans a hand-written x.persona.md without a marker', () => {
+    const { effective, root, scopes } = resolveExample();
+    const plan = planRender(effective, targetsFor(root)).plan!;
+    mkdirSync(join(root, 'proj/.claude/agents'), { recursive: true });
+    writeFileSync(plan.files[1]!.path, '---\nname: mine\n---\nhand written\n');
+    expect(plan.files[1]!.path.endsWith('/agents/example.persona.md')).toBe(true);
+    expect(writePlan(plan).map((d) => d.code)).toEqual(['E_RENDER_UNMARKED']);
+    const resolveNow = (c: string) => resolvePersona(new Registry(scopes), c).effective;
+    expect(findStaleRenders(targetsFor(root), resolveNow)).toEqual([]);
+  });
+
+  it('ignores generated files that do not use the .persona.md suffix', () => {
+    const { effective, root, scopes } = resolveExample();
+    writePlan(planRender(effective, targetsFor(root)).plan!);
+    const old = join(root, 'proj/.claude/agents/persona-example.md');
+    writeFileSync(old, readFileSync(join(root, 'proj/.claude/agents/example.persona.md'), 'utf8').replace(/# hash: .*/, '# hash: sha256:0'));
+    const resolveNow = (c: string) => resolvePersona(new Registry(scopes), c).effective;
+    expect(findStaleRenders(targetsFor(root), resolveNow)).toEqual([]);
+  });
+});

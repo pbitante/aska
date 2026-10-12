@@ -1,0 +1,39 @@
+{
+  "question": "Should the change described in scenario.md ship?",
+  "panel": null,
+  "verdicts": [
+    {
+      "persona": "guardian",
+      "status": "malformed",
+      "verdict": null,
+      "reason": "8 violations: persona must be \"aska:guardian\""
+    },
+    {
+      "persona": "accelerator",
+      "status": "malformed",
+      "verdict": null,
+      "reason": "8 violations: persona must be \"aska:accelerator\""
+    }
+  ],
+  "units": [],
+  "outsideScope": [],
+  "merged": {
+    "conditions": [],
+    "missing": [],
+    "investigate": [],
+    "sections": []
+  },
+  "followUps": [
+    {
+      "type": "rerun",
+      "persona": "guardian",
+      "reason": "8 violations: persona must be \"aska:guardian\""
+    },
+    {
+      "type": "rerun",
+      "persona": "accelerator",
+      "reason": "8 violations: persona must be \"aska:accelerator\""
+    }
+  ],
+  "ok": false
+}

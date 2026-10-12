@@ -1,0 +1,35 @@
+{
+  "name": "aska",
+  "version": "0.7.1",
+  "description": "Swappable reviewer personas built from reusable, role-neutral concern units.",
+  "author": "Peter Bitante",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pbitante/aska.git",
+    "directory": "panel"
+  },
+  "homepage": "https://github.com/pbitante/aska/tree/main/panel#readme",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "check": "npm run typecheck && npm test && npm run smoke && npm run build && git diff --exit-code skills/operator/scripts/persona.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.4"
+  }
+}

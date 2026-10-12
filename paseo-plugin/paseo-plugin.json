@@ -1,0 +1,7 @@
+{
+  "id": "aska-editor",
+  "description": "Paseo plugin for aska: edit personas, units and panels in forms, and follow, archive and replay panel runs.",
+  "requirements": {
+    "paseo": ">=0.11.0"
+  }
+}

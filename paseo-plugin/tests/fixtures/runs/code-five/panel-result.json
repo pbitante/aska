@@ -1,0 +1,275 @@
+{
+  "question": "Should the aska 0.3.0 change (show/save/patch/delete authoring commands, squash commit b1511b8 on main) ship as is?",
+  "panel": "aska:code",
+  "panelists": [
+    {
+      "persona": "aska:guardian",
+      "status": "ok",
+      "judgment": {
+        "persona": "aska:guardian",
+        "verdict": "proceed-with-conditions",
+        "conditions": [
+          "Before a host (the Paseo editor) exposes save or patch, stop silent write-through to symlink targets outside the scope: resolve the target, refuse with a diagnostic (or require an explicit opt-in) when its realpath is outside the scope root, and always report the resolved path in the output. Fix the dangling-link case so it either refuses or creates the link's target, instead of replacing the link with a regular file. Until then, drop 'symlink-safe ... writes' from the release notes.",
+          "Before a host exposes delete, make it recoverable or race-safe: accept --expect-hash on delete (refuse with E_STALE if the file changed since show), and/or move the file to a backup or trash location instead of calling rmSync, and report that location.",
+          "Every host caller (the Paseo editor, and the operator skill's guidance) must always pass --expect-hash from show, or 'none' when creating. Without it, save and patch silently overwrite edits made elsewhere."
+        ],
+        "findings": [
+          {
+            "unit": "aska:data-integrity",
+            "severity": "medium",
+            "claim": "save and patch write through a symlinked target to whatever file it points to, even outside the scope root, and say nothing about it. The output path is the link, so neither the user nor a host can tell that an unrelated file was overwritten. A dangling link is silently replaced by a regular file, so the edit lands somewhere other than where the user's setup expects. The commit calls the writes 'symlink-safe', which overstates what ships.",
+            "evidence": "Evidence B1: with proj/.claude/personas/r.persona.md linked to outside/victim.txt, both save and patch returned written: true, no diagnostics, path = the link, and outside/victim.txt was overwritten with persona markdown. Evidence B3: when z.unit.md was a dangling link, save turned it into a regular file and never created missing-target.md. Code: src/author/files.ts:42 resolves the link with realpathSync(path) and writes there, and nothing checks that the resolved target is inside the scope root. checkAndWrite (src/cli/author.ts:46-76) reports `path`, never the resolved target. A project-scope personas/ folder comes from whatever repo was cloned, so the link target is not under the user's control.",
+            "suggestion": "In writeAtomic or checkAndWrite, compare realpath(target) against realpath(scope root) and refuse with a new diagnostic (e.g. E_OUTSIDE_SCOPE) when it escapes. Add a `target` field to the JSON output when it differs from `path`. For a dangling link, either refuse or write to the link's target, as the comment at files.ts:39-40 promises. Add tests for both cases."
+          },
+          {
+            "unit": "aska:rollback-safety",
+            "severity": "medium",
+            "claim": "delete cannot be undone and cannot be guarded against a stale view. It hard-deletes with rmSync, keeps no backup, and rejects --expect-hash, so a host can delete a file that was edited after it last showed it. With --force it also deletes a file that other files depend on.",
+            "evidence": "src/cli/author.ts:150 calls rmSync(path) directly after the dependents check, with no stale check. src/cli/main.ts:342 rejects --expect-hash for anything but save and patch ('--expect-hash is only accepted by save and patch'), and the tests lock that in. User-scope files (~/.claude/personas) are usually not under version control, so git cannot recover them. The spec's delete row (design doc line 36) gives no concurrency guard or backup. Nothing in the new evidence changes this.",
+            "suggestion": "Accept --expect-hash on delete with the same staleCheck. Before removing the file, copy it to something like <scope>/personas/.trash/ or a tmp backup, and report that location in the JSON output, so an accidental delete or a --force delete can be restored in one step."
+          },
+          {
+            "unit": "aska:data-integrity",
+            "severity": "low",
+            "claim": "Confirmed: patch rewrites the whole file, and only files already in the yaml library's canonical style survive it byte-for-byte. A BOM is stripped and every CRLF becomes LF. Unindented sequences are re-indented, comment spacing and '[ ]' are normalised, and replacing a tier drops the comments inside it. All of this happens even on an empty patch, which still writes the file. Nothing meaningful is lost, but the commit's 'untouched content byte-for-byte' claim is false for hand-edited files and produces noisy whole-file diffs in project repos.",
+            "evidence": "Evidence C: an empty patch on a CRLF+BOM file changed every line. On an LF file with an unindented list, an empty patch re-indented it (`  - a` became `    - a`), changed `a  # why a` to `a # why a` and `[ ]` to `[]`. A units.primary patch dropped the inline and between-entry comments. All six patches returned written: true with no diagnostics. Code: src/author/patch.ts:140 normalizeSource, :163 createNode for the tier, :185 doc.toString re-serialises the frontmatter. The only byte-identity test uses the 33 shipped files, which are already canonical.",
+            "suggestion": "Detect and restore the original line ending and BOM. Skip the write (report written: false or unchanged: true) when the patched content equals the original. Add a CRLF/BOM and hand-formatted-frontmatter patch test, or narrow the 'byte-for-byte' wording in the commit, README and SKILL.md."
+          },
+          {
+            "unit": "aska:data-integrity",
+            "severity": "low",
+            "claim": "Without --expect-hash, save and patch are last-writer-wins, and a concurrent edit is lost with no signal. Even with it, nothing locks the file between the stale check and the rename. The atomic replace also discards the file's mode: a file deliberately made read-only is overwritten and comes back writable. It never calls fsync.",
+            "evidence": "src/author/files.ts:59-61: staleCheck returns undefined when expectHash is undefined. src/cli/author.ts:53-73: the stale check, then a full-scope checkInPlace, then writeAtomic, with no lock across that window. files.ts:44-47 uses writeFileSync(tmp) then renameSync, with no fsync and no chmod. Evidence B5: a mode-444 u.unit.md was saved successfully and came back as 664. README and SKILL.md describe --expect-hash as optional.",
+            "suggestion": "Make the editor host always send --expect-hash. Re-check the hash immediately before renameSync. Copy the original mode onto the tmp file, or refuse to replace a file the user cannot write to (E_WRITE)."
+          },
+          {
+            "unit": "aska:edge-cases",
+            "severity": "low",
+            "claim": "Deleting a project-scope file that shadows a same-named user or plugin file, or saving a new project file that shadows one, silently changes which definition is active. Nothing breaks, so delete reports no dependents and just goes ahead.",
+            "evidence": "del() (src/cli/author.ts:144-150) refuses only on checkInPlace(...).broken, which collects only new error-level diagnostics. Un-shadowing a lower-scope persona or unit produces no error. The tests cover dependents breaking, but not a resolution silently switching to another scope. Evidence B2/B4 show dangling links and directory links elsewhere in personas/ do not block or loop on Node 24, so that edge case is cleared in practice, though B4 notes this rests on Node's cpSync behaviour rather than on the code.",
+            "suggestion": "In delete and save, compare the resolved definition before and after the change, and emit a warning such as W_UNSHADOWED or W_SHADOWS that names the definition which becomes active."
+          }
+        ],
+        "cleared": [],
+        "not_applicable": [],
+        "sections": {},
+        "investigate": []
+      }
+    },
+    {
+      "persona": "aska:tester",
+      "status": "ok",
+      "judgment": {
+        "persona": "aska:tester",
+        "verdict": "proceed-with-conditions",
+        "conditions": [
+          "Add a save (or checkInPlace) test where another file in the library already has an error before the save. Assert that saving an unrelated valid file still exits 0 with written: true and no diagnostic for that file, and that a new error in the file being saved still blocks the write. No test currently proves the baseline comparison the commit message claims.",
+          "Make the patch claim match what the code does. Either keep line endings and the BOM and skip the write when a patch changes nothing, proving it with byte-exact tests on a CRLF+BOM file and on a file with unindented sequences; or narrow the claim in the README, the operator skill and the commit message (the squash is being rebuilt anyway, per evidence D) to 'files already in the yaml library's canonical style'. In both cases, add one non-empty patch test that compares the whole result to the expected text with toBe."
+        ],
+        "findings": [
+          {
+            "unit": "aska:test-evidence",
+            "severity": "medium",
+            "claim": "The commit message says patch keeps 'comments, key order and untouched content byte-for-byte'. The tests only prove this for an empty patch on files already in canonical yaml style, and evidence C shows the claim is false outside that case. Earlier I said this claim was unproven. Evidence C shows it is actually wrong, so I'm keeping the finding and making it firmer.",
+            "evidence": "The only byte-identity test is tests/author/patch.test.ts:67-76: an empty patch `{}` on the 33 shipped files, all of which use LF and canonical style. Every non-empty patch test (patch.test.ts:21-47, tests/cli/author.test.ts:331-339) asserts with toContain or toMatch. Evidence C: with a CRLF+BOM file, an empty patch rewrote every line (the BOM was dropped and CRLF became LF) and still returned written: true. With an LF file, an empty patch re-indented an unindented sequence, normalised the spacing before an inline comment (`a  # why a` became `a # why a`), and rewrote `[ ]` as `[]` on keys the patch never touched. Each of these would have failed a byte-exact test on such a file, but no such test exists. Spec \u00a76 lists 'preserves comments, key order, untouched keys and untouched sections' as its own test item.",
+            "suggestion": "Add patch fixtures with CRLF, a BOM, unindented sequences and extra spacing before comments. Assert `expect(raw).toBe(expected)` for an empty patch and for a single set. Then either make them pass (keep the original EOL and BOM; return written: false when the serialised result equals the input) or narrow the claim."
+          },
+          {
+            "unit": "aska:test-evidence",
+            "severity": "medium",
+            "claim": "No test covers the baseline comparison in checkInPlace, which is what allows a save while some unrelated file is already broken. If the `!baseline.has(keyOf(d))` filter were removed, no test would fail. The new evidence doesn't touch this, so the finding stands.",
+            "evidence": "src/author/check.ts:52-74 drops errors that were already in the baseline. Every fixture in tests/cli/author.test.ts (authorFiles) and tests/author/check.test.ts is a clean library, and check.test.ts:17 asserts there are no errors. A green suite (evidence A: 667 tests) therefore says nothing about this branch. Without the filter, one broken file anywhere in the visible scopes would block every save, patch and delete. The spec \u00a76 item 'a child persona broken by a unit change is caught' is also only covered by a parent-persona edit (author.test.ts:223), not a unit edit.",
+            "suggestion": "Use a fixture with a panel that seats an unknown persona. Save an unrelated valid unit and expect exit 0, written: true, and no diagnostic for the panel. Then save an invalid version of that unit and expect a refusal."
+          },
+          {
+            "unit": "aska:edge-cases",
+            "severity": "medium",
+            "claim": "Patch has no defined handling for files written on Windows or by editors that add a BOM. Any patch, including an empty one, silently converts the whole file to LF without a BOM and reformats unusual but valid yaml in keys the patch didn't touch. It also writes even when nothing changed.",
+            "evidence": "Evidence C, File 1 (CRLF+BOM): all three patches, including `{}`, changed every line. Evidence C, File 2: re-indented sequences and `[ ]` became `[]` under `{}` and `set description`. All six patches returned written: true with no diagnostics. For a form editor that patches on every change (the Paseo editor this CLI exists to serve), each first edit creates a whole-file diff in a user's dotfiles repo.",
+            "suggestion": "Detect and restore the original line ending and BOM on write, and skip the write (written: false) when the output equals the input. Reformatting of untouched non-canonical yaml can be documented if it can't be avoided."
+          },
+          {
+            "unit": "aska:edge-cases",
+            "severity": "low",
+            "claim": "When the target itself is a dangling symlink, save replaces the link with a regular file, which contradicts 'the link survives'. Evidence B3 confirmed this. I withdraw the other half of my earlier finding: a dangling link elsewhere in personas/ does not block writes (evidence B2 and B4: on Node 24, cpSync kept nested links as links).",
+            "evidence": "src/author/files.ts:42: `existsSync(path)` is false for a dangling link, so `target = path` and renameSync replaces the link. B3: after `save unit z`, z.unit.md was a regular file and missing-target.md was never created. The symlink tests (author.test.ts:245-308) only use links that resolve. B4 also notes that staging's tolerance of nested links depends on Node 24 cpSync behaviour, and the code doesn't guarantee it.",
+            "suggestion": "Use lstatSync instead of existsSync to decide whether the target is a link, and either write to the link's target or refuse with a clear diagnostic. Add a test for each case: a dangling target, and a dangling link elsewhere in personas/. The second test would pin the Node-dependent staging behaviour."
+          },
+          {
+            "unit": "aska:edge-cases",
+            "severity": "low",
+            "claim": "Saving over a read-only file succeeds and resets its mode. A user who protects a file with chmod 444 loses that protection silently.",
+            "evidence": "Evidence B5: u.unit.md had mode 444 before `save unit u` returned written: true, and mode 664 after. writeAtomic (src/author/files.ts:41-53) writes a new temp file and renames it over the target without copying the old mode.",
+            "suggestion": "Copy the original file's mode onto the temp file before the rename, or refuse to save over a file without write permission. Add a test either way."
+          },
+          {
+            "unit": "aska:edge-cases",
+            "severity": "low",
+            "claim": "--expect-hash is check-then-act with no re-check before the rename. Two writers that start from the same hash can both pass, and the second silently overwrites the first.",
+            "evidence": "src/cli/author.ts:58-82 runs staleCheck, then checkInPlace (which copies and parses the scope), then writeAtomic, and nothing re-reads the file before the rename. The window is narrow for a single-user CLI, but the spec calls this optimistic concurrency.",
+            "suggestion": "Re-run staleCheck just before writeAtomic, or document that the check is best-effort. Add a test that two sequential saves from the same hash refuse the second."
+          },
+          {
+            "unit": "aska:edge-cases",
+            "severity": "low",
+            "claim": "Several unusual states have defined behaviour but no test: E_NO_SCOPE when the project .claude folder is the user folder; E_NO_SCOPE for patch and delete; saving a file that has no frontmatter or no name field; and a refused save on E_STALE leaving the file unchanged.",
+            "evidence": "The droppedClaudeDir branch at src/author/files.ts:18-20 is never exercised. E_NO_SCOPE is only tested for save (author.test.ts:215). The save E_STALE test (author.test.ts:188-194) checks the code but not that the file is unchanged. The patch version (author.test.ts:341-349) does check that."
+          }
+        ],
+        "cleared": [
+          "aska:maintainability"
+        ],
+        "not_applicable": [],
+        "sections": {}
+      }
+    },
+    {
+      "persona": "aska:red-team",
+      "status": "ok",
+      "judgment": {
+        "persona": "aska:red-team",
+        "verdict": "proceed-with-conditions",
+        "conditions": [
+          "Bound the symlink write-through in writeAtomic (src/author/files.ts). Before save or patch writes through a symlinked target in the project scope, check that realpath(target) is inside realpath(scope root). If it isn't, refuse with E_WRITE and a hint that names the real path. For the user scope, allow targets under the user's home so dotfile managers (stow, home-manager, chezmoi) keep working. Add a regression test that reproduces evidence B1 and expects a refusal.",
+          "Report the resolved path in save and patch output (for example a `realPath` field in --json, and `wrote <link> -> <real>` in text) whenever it differs from the link path, so a redirected write is never silent.",
+          "Correct the commit or release wording before this history is published or rewritten. 'symlink-safe staging and writes' in b1511b8, and the historian's proposed subject 'keep save, patch and delete inside their scope and off symlink targets' (evidence D, commit c4da82b), both claim a containment that evidence B1 shows does not exist."
+        ],
+        "findings": [
+          {
+            "unit": "aska:security",
+            "severity": "medium",
+            "claim": "CONFIRMED (evidence B1): save and patch follow a symlinked target to wherever it points, with no containment check, and report only the link path. A cloned or otherwise untrusted repo can therefore turn a routine persona edit into a silent overwrite of any file the user can write.",
+            "evidence": "Evidence B1, run with the shipped bundle: `proj/.claude/personas/r.persona.md -> outside/victim.txt`. `save persona r --scope project` returned written: true with no diagnostics and `path` set to the link path, and outside/victim.txt was replaced with persona markdown. `patch` did the same (victim.txt then contained `description: Patched.`). Code at b1511b8, src/author/files.ts writeAtomic: `const target = existsSync(path) && lstatSync(path).isSymbolicLink() ? realpathSync(path) : path; \u2026 renameSync(tmp, target)`. Nothing compares target with the scope root. src/cli/author.ts:77 reports `path` (the link), not target. The project scope root is any .claude folder between cwd and the git root, so the repo controls it. --expect-hash doesn't help, because `show` hashes the same link target, and check-in-place validates only the candidate content, not the destination. Evidence A confirms the bundle matches src, so this is the code that ships. Why medium rather than high: the bytes written are the caller's own persona text, so the impact is clobbering or destroying a file (~/.bashrc, a config file, a key file), not code execution or another user's privileges. It does need a victim who runs save or patch on the planted name, and an agent driving the operator skill or the Paseo editor makes that more likely.",
+            "suggestion": "See conditions 1 and 2: realpath containment for the project scope, a home-bounded rule for the user scope, the resolved path in the output, and a regression test built from B1."
+          },
+          {
+            "unit": "aska:security",
+            "severity": "low",
+            "claim": "`show` prints a file's raw bytes, and the Registry treats a symlink to a regular file as a file. A repo-planted `x.unit.md -> ~/.aws/credentials` or `-> ~/.ssh/id_ed25519` is therefore printed verbatim, and lands in a hosted model's context when an agent runs `show`.",
+            "evidence": "src/scopes/registry.ts isRegularFile accepts a symbolic link when `statSync(...).isFile()`. src/author/show.ts showFile reads the file with readFileSync and returns `raw` in both text and --json output, with no containment or size check. Before 0.3.0, a file like that only produced parse diagnostics, not its contents. The new evidence doesn't test this directly, but the code path is the same link-following that B1 confirmed for writes. Low because the file has to be named so the Registry picks it up, and someone has to choose to `show` it.",
+            "suggestion": "Apply the same realpath containment rule in show, at least for --scope project: refuse or warn when a file resolves outside its scope root. Consider capping `raw` at a reasonable size."
+          },
+          {
+            "unit": "aska:data-integrity",
+            "severity": "low",
+            "claim": "CONFIRMED (evidence B5): save silently replaces a file the user made read-only and resets its mode, because temp-file-plus-rename only needs write access to the directory.",
+            "evidence": "Evidence B5: u.unit.md was set to mode 444, `save unit u` returned written: true, and the mode afterwards was 664. writeAtomic writes `${target}.tmp-${pid}` with default permissions and renames it over the target. It never reads or reapplies the existing mode or owner. The only permission test makes the directory read-only, not the file.",
+            "suggestion": "Stat the existing target first. Either refuse with E_WRITE when the file isn't writable by the user, or chmod the temp file to the original mode before the rename."
+          },
+          {
+            "unit": "aska:data-integrity",
+            "severity": "low",
+            "claim": "CONFIRMED (evidence C): patch rewrites the whole file even when nothing changes. An empty patch strips a BOM, converts CRLF to LF, re-indents unindented sequences and normalises comment spacing, and still returns written: true. That contradicts the commit message's claim that patch keeps untouched content byte-for-byte.",
+            "evidence": "Evidence C: for a CRLF file with a BOM, patch `{}` changed every line. For an LF file, patch `{}` re-indented `  - a` to `    - a`, turned `a  # why a` into `a # why a` and `[ ]` into `[]`. All six patches returned written: true with no diagnostics. Only files already in the yaml library's canonical style round-trip unchanged, which all 33 shipped files are. The data isn't lost semantically, but it is silently changed. That produces noisy diffs in a user's dotfiles or repo, and a CRLF repo may then get mixed line endings.",
+            "suggestion": "Skip the write (written: false, or a no-op flag) when the patched text equals the original semantically, or when the patch is empty. Preserve the BOM and dominant line ending on output. Narrow the 'byte-for-byte' wording to canonical-style files until then."
+          },
+          {
+            "unit": "aska:data-integrity",
+            "severity": "low",
+            "claim": "CONFIRMED (evidence B3): when the target is a dangling symlink, save replaces the link with a regular file instead of creating the file it points to. That breaks a dotfile-manager link without saying so, contradicting the 'link survives' promise.",
+            "evidence": "Evidence B3: z.unit.md was a link to missing-target.md. After `save unit z`, z.unit.md was a regular file and missing-target.md had never been created. writeAtomic only follows the link when existsSync(path) is true, and that is false for a dangling link. For security this is the safer outcome, since a dangling link can't be used to create files outside the scope, so this is only an integrity and surprise issue.",
+            "suggestion": "Detect a dangling link with lstat and refuse with E_WRITE, naming the missing target. Don't silently replace it, and don't create the target outside the scope."
+          }
+        ],
+        "cleared": [
+          "aska:privacy",
+          "aska:dependencies"
+        ],
+        "not_applicable": [],
+        "sections": {},
+        "investigate": [
+          {
+            "what": "Repeat evidence B4 (a directory symlink inside personas/, pointing at an ancestor and at a large folder outside the project) under Node 20 and Node 22, the other versions package.json `engines: node >=20` allows, and check whether checkInPlace's `cpSync(src, dst, { recursive: true, dereference: true })` follows the nested directory links.",
+            "why": "I withdrew my earlier low finding (that staging could copy a home-sized tree into /tmp) because B4 showed Node 24 copied 0 files and kept the nested links as links. The evidence itself notes the code doesn't guarantee that. If an older supported Node dereferences nested links, the finding comes back.",
+            "tools": [
+              "Bash with node 20 and node 22 (nvm or similar) running skills/operator/scripts/persona.mjs"
+            ]
+          },
+          {
+            "what": "Reproduce the `show` read-through: plant `personas/leak.unit.md -> <scratch secret file>` in a scratch project, run `show unit leak --scope project --json`, and confirm `raw` contains the secret file's bytes.",
+            "why": "This confirms the low security finding on show end to end. The new evidence covered writes through links, but not reads.",
+            "tools": [
+              "Bash (node skills/operator/scripts/persona.mjs)"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "persona": "aska:maintainer",
+      "status": "ok",
+      "judgment": {
+        "persona": "aska:maintainer",
+        "verdict": "proceed-with-conditions",
+        "conditions": [
+          "In project scope, refuse a save or patch whose target is a symlink that resolves outside the project root (keep following links in user scope for dotfiles setups), and report the real path written alongside the link path in the result. Add a test that plants a link to a file outside the project and expects a refusal.",
+          "Make patch keep the file's BOM and line endings and skip the write when the result is byte-identical. If that isn't done in this release, change the README and operator-skill wording 'keeping everything it doesn't touch' to say which formatting is normalised (CRLF, BOM, sequence indent, comment spacing), and add a test that pins the chosen behaviour."
+        ],
+        "findings": [
+          {
+            "unit": "aska:security",
+            "severity": "medium",
+            "claim": "The write-through-symlink gap is now confirmed. A project-scope save or patch whose target is a symlink to a file outside the project overwrites that outside file with persona markdown. It reports written: true with no diagnostic, and the result names only the link path, so nobody can tell that a file outside the scope was replaced. A cloned, untrusted repo can plant such a link under .claude/personas/. Two related write-path facts make the same point: a dangling target link is silently replaced by a regular file, and a deliberately read-only (444) file is replaced and comes back 664.",
+            "evidence": "Evidence B1: proj/.claude/personas/r.persona.md -> outside/victim.txt. Both `save persona r --scope project` and `patch persona r` rewrote outside/victim.txt and returned written: true, no diagnostics, path = the link. src/author/files.ts:42 resolves the link with realpathSync and writes to it, with no check that it stays inside the scope root. Evidence B3: a dangling target link was replaced, which contradicts the 'link survives' comment at files.ts:40. Evidence B5: mode 444 became 664 through the temp-file-plus-rename at files.ts:44-47. Impact is limited because the user starts the write, the content must validate as a persona, unit or panel, and names are kebab-case only. That is why this is medium and not high.",
+            "suggestion": "In writeAtomic's caller, compare realpath(target) against the scope root when the scope is project, and refuse with a named diagnostic (for example E_OUTSIDE_SCOPE) if it falls outside. Include the resolved target in the JSON result. Optionally refuse to replace a file the user can't write to, rather than replacing it through rename."
+          },
+          {
+            "unit": "aska:maintainability",
+            "severity": "medium",
+            "claim": "patch's documented contract ('keeping everything it doesn't touch' in the README and operator skill, and 'byte-for-byte' in the commit message) only holds for files already in the yaml library's canonical style. Any patch, even an empty one, rewrites a CRLF or BOM file in full and re-indents unindented sequences and comment spacing. Someone who later relies on the documented guarantee, such as an editor diffing before and after or a user on Windows line endings, will be surprised, and no test marks where the guarantee stops.",
+            "evidence": "Evidence C. File 1 (CRLF + BOM): an empty patch {} changed every line, removing the BOM and turning every CRLF into LF. File 2: an empty patch re-indented `  - a` to `    - a`, normalised `a  # why a` to `a # why a`, and turned `[ ]` into `[]`. All returned written: true. README.md:293 and skills/operator/SKILL.md:27 promise 'keeping everything it doesn't touch'. The spec's goal (design spec line 13) is 'without losing anything it didn't touch'. tests/author/patch.test.ts covers only canonical-style files (the 33 shipped files round-trip).",
+            "suggestion": "Detect and restore the BOM and the dominant EOL around the yaml round-trip. Return written: false with no write when the new content equals the old. Add the evidence-C files as fixtures. Where full fidelity isn't worth it (sequence indent, comment spacing), say so in the README."
+          }
+        ],
+        "cleared": [
+          "aska:observability"
+        ],
+        "not_applicable": [],
+        "sections": {},
+        "investigate": [
+          {
+            "what": "Repeat the staging probe from evidence B2 and B4 (a dangling ghost.unit.md, a directory link to an ancestor, a directory link to a large outside folder, then save, patch and delete) on Node 20 and Node 22, the oldest versions package.json engines '>=20' allows.",
+            "why": "I withdrew my round-1 observability finding because Node 24's cpSync (src/author/check.ts:58, recursive + dereference) kept nested links as links and didn't throw. The evidence notes that the code itself doesn't guarantee this. If an older Node follows or throws on those links, every write in the scope fails with the misleading E_WRITE 'Check permissions on <dir>' (files.ts:54-57), and the finding comes back.",
+            "tools": [
+              "shell with Node 20 and 22 (nvm or similar) in a throwaway directory"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "persona": "aska:historian",
+      "status": "ok",
+      "judgment": {
+        "persona": "aska:historian",
+        "verdict": "proceed-with-conditions",
+        "conditions": [
+          "Replace b1511b8 on main with the six-commit history, not the single squash. Branch history-rebuild (fae22de..7e25d4b, based on 7532256) already holds it: each commit passes `npm run check`, and `git diff b1511b8 history-rebuild` is empty (evidence D). `git remote -v` is still empty, so main has never been pushed and the swap is only a ref move.",
+          "Before moving main, reword three of the rebuilt messages (6fd3770 patch, 04f911a delete, c4da82b harden) as shown under 'Proposed history', so no message claims what evidence B and C disprove. That includes withdrawing the subject I proposed in round one, 'harden: keep save, patch and delete inside their scope and off symlink targets'.",
+          "Land any fix for the symlink write-through (B1), dangling-target replacement (B3), mode reset (B5) or CRLF/BOM rewriting (C) as new `fix:` commits on top. Do not amend them into the rebuilt commits: each is a behaviour change worth bisecting and reverting on its own."
+        ],
+        "findings": [
+          {
+            "unit": "aska:commit-history",
+            "severity": "medium",
+            "claim": "As shipped, main delivers four independent commands, the hardening pass and the 0.3.0 bump in one 2,039-line commit, so none of them can be bisected or reverted on its own. A verified, passing six-step replacement now exists, which makes the fix a ref move.",
+            "evidence": "commits.txt: one commit, 21 files, +2039/-74. commits-before-squash.txt: the work arrived as feat commits for show (dea59e4), save (1dc4080), patch (68134ae) and delete (96c946c), plus two adjacent fixups (0024fac, 62e6a7b) and one hardening commit (ffbe6b4). Evidence D: the proposed rebuild applied with no conflicts, including moving 71eb591 after ffbe6b4. `npm run check` (typecheck, tests, smoke, build, bundle-drift diff) passed at all six commits (611 \u2192 667 tests), and the final tree is byte-identical to b1511b8. The rebuild also restores the original Co-Authored-By: Claude Sonnet 5 trailers that the squash replaced with Opus 5.5, and its first commit carries the purpose and spec link the squash message lacked. Evidence B1 makes the cost concrete: save/patch write through a symlink to a file outside the project. When that gets fixed, the fix should revert or bisect against the hardening step alone, not against the whole feature.",
+            "suggestion": "Point main at history-rebuild once the rewords in 'Proposed history' are applied, e.g. reword on the branch, check `git diff b1511b8 history-rebuild` is still empty, then `git branch -f main history-rebuild` from outside the main checkout (or `git reset --hard history-rebuild` on main). Afterwards delete cli-authoring-presquash and history-rebuild."
+          },
+          {
+            "unit": "aska:commit-history",
+            "severity": "medium",
+            "claim": "Several messages, including the squash message and the subject I proposed last round, describe safety and fidelity guarantees that the shipped code demonstrably lacks. Blame and log readers will trust them.",
+            "evidence": "Squash message: 'symlink-safe staging and writes' and 'keeping comments, key order and untouched content byte-for-byte'. Rebuilt c4da82b subject (my round-one wording): 'keep save, patch and delete inside their scope and off symlink targets'. Its body says 'writeAtomic now writes through a symlinked target so the link survives'. Evidence B1: save and patch through `personas/r.persona.md` \u2192 `outside/victim.txt` returned written:true and overwrote the file outside the project; nothing checks that the resolved path stays in scope. B3: a dangling-link target is replaced by a regular file, so the link does not survive. B5: a 444 file comes back 664. Evidence C: CRLF, a BOM, unindented sequences or extra comment spacing are re-serialised on any patch, even an empty `{}`, so 'untouched content survive' (rebuilt 6fd3770) holds only for files already in yaml's canonical style. The c4da82b body also cites review labels (C1, I2, I1, I3) that exist nowhere in the repo, and `harden:` is not a commit type the repo uses (feat/fix/test/chore/docs).",
+            "suggestion": "Use the reworded messages in 'Proposed history'. They state what each step does and name the known limits, without promising containment or byte fidelity. If the squash were kept instead, amend its message the same way: drop 'symlink-safe' and qualify 'byte-for-byte'."
+          }
+        ],
+        "cleared": [],
+        "not_applicable": [],
+        "sections": {
+          "Proposed history": "pick dea59e4 feat: persona show prints one unit, persona or panel file as data\n    (message as in rebuilt fae22de, unchanged)\n    aska can read but not write persona files; a form editor (the Paseo\n    editor first) needs to round-trip them without its own copy of the\n    file-format knowledge. show prints one file as data: fields as\n    written, sections, raw text and a sha256 hash for optimistic\n    concurrency. Spec: docs/specs/2026-10-09-aska-cli-authoring-design.md.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n\npick 1dc4080 feat: persona save checks a whole file as if in place, then writes it\n    (message as in rebuilt be99962, unchanged)\n    So that no command ever writes a file that fails validation: the\n    candidate is checked against a staged copy of the scope, breakage in\n    dependent files is reported at their real paths, and the write is\n    refused on errors. E_NAME_MISMATCH points at the name field's real\n    line.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nfixup 0024fac fix: pin E_NAME_MISMATCH to the name field's real line, add primary_order coverage\n\nreword 68134ae feat: persona patch applies form edits through the yaml Document API\n    Editors edit fields, not files: patch applies set/unset/sections to\n    the parsed document so comments and key order survive, and a file\n    already in the yaml library's default style round-trips byte for\n    byte outside the edited keys. Files with CRLF, a BOM, unindented\n    sequences or extra comment spacing are re-serialised as a whole.\n    A broken existing file is reported as a diagnostic, not a crash,\n    and extends is ref-validated like every other reference.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nfixup 62e6a7b fix: patch reports a broken existing file as a diagnostic, not a crash or usage error\n\nreword 96c946c feat: persona delete lists what would break and needs --force to break it\n    So an editor can't silently orphan the personas and panels that\n    extend or reference a file: delete reports every dependent that\n    would break and refuses unless --force is given.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n\nreword ffbe6b4 fix: reject path-like names, report fs errors and keep symlinks on save/patch/delete\n    save, patch and delete now require kebab-case names (show still\n    takes a ref), so a path-like name can no longer reach outside its\n    scope. Filesystem errors during staging, write and delete come back\n    as an E_WRITE diagnostic through the normal JSON/exit-1 path instead\n    of a crash. The in-place check stages real files rather than links,\n    so a refused write never touches a symlink's target, and a\n    successful write goes through an existing symlink to its target so\n    the link is kept. The target is not checked to lie inside the scope.\n    Also: a missing patched section is appended under its canonical\n    heading, patch rejects section text containing a \"## \" heading line\n    (exit 2, use save), and delete's children-dependents case and\n    W_DROPPED_SETTINGS's --json path are covered by tests.\n\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n\npick 71eb591 docs: document show, save, patch and delete; aska 0.3.0\n\nNotes:\n- This is the round-one plan, already built and verified as history-rebuild (evidence D). The only changes are the three rewords above (68134ae, 96c946c, ffbe6b4); show, save and docs keep their rebuilt messages. Rewording leaves every tree unchanged, so the per-commit `npm run check` passes from D still hold.\n- I withdraw my round-one subject for ffbe6b4 ('harden: keep save, patch and delete inside their scope and off symlink targets'): evidence B1 shows writes do leave the scope through a symlink.\n- Keep ffbe6b4 as its own commit rather than folding it into the feat commits. It is the step a fix for B1/B3/B5 will build on and may need to revert or bisect against (rollback-safety tie-break).\n- 71eb591 moves after ffbe6b4 with no conflict (verified in D), so the 0.3.0 bump is the last step.\n- Any fix for B1, B3, B5 or C goes on top as new fix: commits, not into this list."
+        }
+      }
+    }
+  ]
+}

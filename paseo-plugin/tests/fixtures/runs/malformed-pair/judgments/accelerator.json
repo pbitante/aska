@@ -1,0 +1,44 @@
+{
+  "persona": "accelerator",
+  "verdict": "proceed-with-conditions",
+  "conditions": [
+    "Decouple the destructive step: deploy app code that can read/write display_name while fullname still exists (dual-write or fallback), then drop fullname only after confirming the new code path works in production. Don't ship the ADD+COPY+DROP as one irreversible migration bundled with the app cutover.",
+    "Run the backfill UPDATE in batches (or at least wrap row-range chunks in short transactions) instead of a single unbounded UPDATE outside a transaction on a 4M-row table, to avoid long locks/replication lag.",
+    "Drop the 'pronunciation' column addition from this PR; ship it separately if/when there's an actual ticket or use case for it."
+  ],
+  "findings": [
+    {
+      "unit": "rollback-safety",
+      "severity": "high",
+      "claim": "If anything goes wrong after deploy, there is no quick, safe way back: the column is dropped irrecoverably and app code is already pointed at the new column in the same release.",
+      "evidence": "Migration has 'no down-migration' and does ADD -> COPY -> DROP of fullname in one shot, with application code switched to display_name in the same deploy.",
+      "suggestion": "Split into add-column / dual-read-write / verify / drop-column as separate deploys, so a bad deploy can be rolled back by reverting app code without needing the dropped column back."
+    },
+    {
+      "unit": "scope-creep",
+      "severity": "low",
+      "claim": "The PR adds an unrelated 'pronunciation' column that the ticket never asked for.",
+      "evidence": "Scenario states: 'The ticket asked only for the rename, but the PR also adds an optional pronunciation column \"while we're here\".'",
+      "suggestion": "Ship the rename alone; file the pronunciation column as its own ticket/PR."
+    },
+    {
+      "unit": "user-value",
+      "severity": "medium",
+      "claim": "No concrete user-facing benefit is named for this change beyond an internal field rename; users see the same name, just under a renamed column.",
+      "evidence": "The change is described purely as a schema rename ('rename users.fullname to users.display_name') with application code updated to match; no new capability or visible fix is described.",
+      "suggestion": "If this rename unblocks a planned feature (e.g., supporting display names distinct from legal names), state that explicitly and ship it in the same release as that feature so the value lands now, not later."
+    }
+  ],
+  "cleared": [
+    "delivery-speed"
+  ],
+  "not_applicable": [],
+  "sections": {},
+  "investigate": [
+    {
+      "what": "Whether the production database/ORM enforces a maintenance window or has replicas sensitive to long-running unbatched UPDATEs on a 4M-row table.",
+      "why": "An unbatched UPDATE outside a transaction on a large table can cause replication lag or lock contention that affects live users; this can only be confirmed by running/profiling the migration against a prod-like dataset.",
+      "tools": ["database query/profiling access", "staging environment with representative data volume"]
+    }
+  ]
+}

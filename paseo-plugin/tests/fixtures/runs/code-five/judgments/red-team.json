@@ -1,0 +1,60 @@
+{
+  "persona": "aska:red-team",
+  "verdict": "proceed-with-conditions",
+  "conditions": [
+    "Before a write or delete in the project scope, resolve the target's real path (and the real path of personas/ and .claude/). If it falls outside the scope root, either refuse (for example with E_WRITE and a hint) or require an explicit flag. Report the real path in the output either way, so a symlink planted in a cloned repo can't silently redirect `save` or `patch` onto an arbitrary file the user can write to.",
+    "In checkInPlace, stop copying the whole personas/ tree with `dereference: true`. Copy only the top-level *.unit.md, *.persona.md and *.panel.md entries that the Registry would scan, or skip directory symlinks. Then a planted `personas/x -> ~` can't make every save or delete copy the user's home directory into /tmp."
+  ],
+  "findings": [
+    {
+      "unit": "aska:security",
+      "severity": "medium",
+      "claim": "save and patch write through a symlinked target to wherever it points, with no check that the resolved path stays inside the scope root, and the output reports the link path rather than the real one. A cloned or otherwise untrusted project can therefore turn an ordinary persona edit into an overwrite of any file the user can write.",
+      "evidence": "src/author/files.ts writeAtomic: `const target = existsSync(path) && lstatSync(path).isSymbolicLink() ? realpathSync(path) : path; mkdirSync(dirname(target), …); renameSync(tmp, target)`. Nothing compares `target` with the scope root. Following the link is deliberate (tests/cli/author.test.ts:245 'save: symlinked targets', and the comment about GNU stow, home-manager and chezmoi), and it also covers a symlinked personas/ folder (test at :294). The project scope root comes from locateProject (src/scopes/discover.ts), which is any .claude dir between cwd and the git root, so it is fully repo-controlled. Attack: the repo ships `.claude/personas/reviewer.persona.md -> ../../../../.bashrc` (or `.claude/personas -> ~/.config/somewhere`). The user, or an agent driving the operator/author skill or the Paseo editor, runs `persona save persona reviewer --scope project --file new.md`. The check-in-place step passes if new.md is a valid persona, and the user's ~/.bashrc (or any other user-writable file) is replaced with persona markdown. report() prints `wrote <project>/.claude/personas/reviewer.persona.md`, hiding where the bytes went. `--expect-hash` doesn't help, because `show` hashes the same link target. The impact is clobbering or destroying files rather than code execution, because the content is the caller's own persona text. The spec's 'symlink-safe staging and writes' describes preserving links, not containment.",
+      "suggestion": "Keep link-following for the dotfiles case, but bound it. For the user scope, allow targets under the user's home. For the project scope, require realpath(target) to sit under realpath(scope root), or under home for the user scope, and otherwise refuse with a diagnostic that names the real path. Always include the resolved path in the JSON output (for example `realPath`)."
+    },
+    {
+      "unit": "aska:security",
+      "severity": "low",
+      "claim": "`show` is the first command that prints a file's raw bytes, and the Registry follows file symlinks. So a repo-planted `x.unit.md -> ~/.aws/credentials` (or ~/.ssh/id_ed25519) gets printed verbatim. When an agent runs show, as the operator skill and the Paseo editor do, those secrets land in the hosted model's context.",
+      "evidence": "src/scopes/registry.ts:25-28 counts a symlink as a file when `statSync(...).isFile()`. src/author/show.ts showFile does `raw = readFileSync(file.path)` and returns `raw` in both text mode (`env.out(s.raw)`) and `--json` mode. There is no size, content or containment check. Before 0.3.0, commands only emitted parse diagnostics about such a file, not its contents.",
+      "suggestion": "Apply the same containment rule in `show`, or at least in `show --scope project`: refuse or warn when a file's real path leaves its scope root. Consider capping the size of `raw`."
+    },
+    {
+      "unit": "aska:security",
+      "severity": "low",
+      "claim": "checkInPlace runs on every save, patch and delete. It recursively copies the target scope's whole personas/ folder with `dereference: true`, so a planted directory symlink makes each write copy an arbitrary tree, such as the user's home, into /tmp. The cost is time and disk, and if the process dies mid-copy, a second copy of secrets is left behind in /tmp.",
+      "evidence": "src/author/check.ts: `if (existsSync(src)) cpSync(src, dst, { recursive: true, dereference: true });`. The Registry only scans top-level *.unit|persona|panel.md entries, so nothing below the top level is needed. The `finally` rmSync cleans up only on normal exit. mkdtemp creates the folder as 0700, so other users can't read the leftovers, but a home-sized copy can fill /tmp. Loops and special files throw and surface as E_WRITE, which is acceptable.",
+      "suggestion": "Copy only the top-level persona, unit and panel files that the Registry would read, and don't recurse into directories."
+    },
+    {
+      "unit": "aska:data-integrity",
+      "severity": "low",
+      "claim": "Writing with temp-file-plus-rename discards the existing file's mode and ownership. A persona file the user made read-only to protect it is silently replaced, because rename only needs write permission on the directory.",
+      "evidence": "src/author/files.ts writeAtomic writes `${target}.tmp-${pid}` with default permissions (0666 & ~umask), then renameSync over the target. The existing file's mode is never read or reapplied. The only permission test (tests/cli/author.test.ts:315) makes the directory read-only, not the file.",
+      "suggestion": "Before writing, stat the existing target. Refuse if it isn't writable (E_WRITE), or chmod the temp file to the original mode before the rename."
+    }
+  ],
+  "cleared": [
+    "aska:privacy",
+    "aska:dependencies"
+  ],
+  "not_applicable": [],
+  "sections": {},
+  "investigate": [
+    {
+      "what": "Reproduce the write-through: in a temporary git repo, create `.claude/personas/r.persona.md` as a symlink to a scratch file outside the repo, run `persona save persona r --scope project --file <valid persona>`, and confirm the scratch file is overwritten and the output names only the link path.",
+      "why": "This confirms the medium security finding end to end, including that check-in-place doesn't stop it.",
+      "tools": [
+        "Bash (node skills/operator/scripts/persona.mjs)"
+      ]
+    },
+    {
+      "what": "Check that the shipped bundle skills/operator/scripts/persona.mjs is byte-identical to a fresh `npm run build` of src at b1511b8. `npm run check` does this with git diff --exit-code.",
+      "why": "Users run the bundle, not src. A stale bundle would mean the reviewed code isn't the code that ships.",
+      "tools": [
+        "Bash (npm run build in a scratch worktree)"
+      ]
+    }
+  ]
+}

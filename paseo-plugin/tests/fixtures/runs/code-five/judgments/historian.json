@@ -1,0 +1,36 @@
+{
+  "persona": "aska:historian",
+  "verdict": "proceed-with-conditions",
+  "conditions": [
+    "Before main is pushed anywhere, replace b1511b8 with the six-commit history under 'Proposed history', rebuilt from the original branch commits (dea59e4..ffbe6b4). They are still in the object store but no ref points at them, so do this before reflog expiry or gc removes them. The final tree must stay byte-identical to b1511b8: check with `git diff b1511b8 <new-head>`.",
+    "Run the test suite (and build the bundled skills/operator/scripts/persona.mjs if a test checks it) at each of the six new commits, so every step is known to pass on its own."
+  ],
+  "findings": [
+    {
+      "unit": "aska:commit-history",
+      "severity": "medium",
+      "claim": "Squashing eight branch commits into one 2,039-line commit throws away four independently bisectable and revertable steps (show, save, patch, delete). It breaks with the repo's own history, where every earlier feature landed as separate feat/fix commits. A clean version of that history was one rebase away.",
+      "evidence": "commits.txt shows a single commit touching 21 files (+2039/-74). It delivers four commands, each a self-contained spec item (spec §2, A1), plus the 0.3.0 version bump. commits-before-squash.txt shows each command already arrived as its own feat commit (dea59e4 show, 1dc4080 save, 68134ae patch, 96c946c delete), each with its own tests. Only three commits were repair noise: 0024fac and 62e6a7b, which fix the commit just before them, and ffbe6b4, which hardens save/patch/delete. `git log --oneline` on main shows granular commits for every earlier feature (bef979d/628b8c9, a156197/c51d90c, 294260a, 8994282, …). The squash version is the outlier. Cost: a future bisect over a regression in show can't tell show apart from patch's yaml-Document rewrite, and you can't revert delete without also losing show/save/patch. `git remote -v` is empty, so main has never been pushed and rewriting it costs almost nothing now.",
+      "suggestion": "Rebuild the history as in 'Proposed history': fold the two adjacent fixups into the feat commits they repair, keep the hardening pass as its own commit, and move docs + version bump to the end so the 0.3.0 bump is the last step."
+    },
+    {
+      "unit": "aska:commit-history",
+      "severity": "low",
+      "claim": "The squash message is a thorough 'what' but never says why. It also reattributes the work: every original commit was co-authored by Claude Sonnet 5, but the squash credits Claude Opus 5.5 only.",
+      "evidence": "commit.txt lists flags, diagnostics and behaviours. It never mentions that the commands exist so a form editor (the Paseo editor, spec sub-project B) can read and write persona files without its own copy of the file-format knowledge (spec §1 Purpose), and it doesn't reference the design spec. The trailers in commits-before-squash.txt are all 'Co-Authored-By: Claude Sonnet 5'; b1511b8's trailer is 'Claude Opus 5.5'.",
+      "suggestion": "Whether or not the history is rebuilt, open the first feat commit (or the single commit, if kept) with one sentence of purpose, e.g. 'aska could read but not write persona files; these commands let an editor such as the Paseo editor show, save, patch and delete them while aska keeps the file-format knowledge (docs/specs/2026-10-09-aska-cli-authoring-design.md)'. Keep the original Co-Authored-By trailers."
+    }
+  ],
+  "cleared": [],
+  "not_applicable": [],
+  "sections": {
+    "Proposed history": "pick dea59e4 feat: persona show prints one unit, persona or panel file as data\n    aska can read but not write persona files; a form editor (the Paseo editor first) needs to round-trip them without its own copy of the file-format knowledge. show prints one file as data: fields as written, sections, raw text and a sha256 hash for optimistic concurrency. Spec: docs/specs/2026-10-09-aska-cli-authoring-design.md.\n    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n\npick 1dc4080 feat: persona save checks a whole file as if in place, then writes it\n    So that no command ever writes a file that fails validation: the candidate is checked against a staged copy of the scope, breakage in dependent files is reported at their real paths, and the write is refused on errors. E_NAME_MISMATCH points at the name field's real line.\nfixup 0024fac fix: pin E_NAME_MISMATCH to the name field's real line, add primary_order coverage\n\npick 68134ae feat: persona patch applies form edits, keeping everything it doesn't touch\n    Editors edit fields, not files: patch applies set/unset/sections through the yaml Document API so comments, key order and untouched content survive. A broken existing file is reported as a diagnostic, not a crash, and extends is ref-validated like every other reference.\nfixup 62e6a7b fix: patch reports a broken existing file as a diagnostic, not a crash or usage error\n\npick 96c946c feat: persona delete lists what would break and needs --force to break it\n\nreword ffbe6b4 fix: close symlink, name-escape and fs-error gaps in persona save/patch/delete\n    harden: keep save, patch and delete inside their scope and off symlink targets\n    (keep the original body, which already explains each gap and its fix; kept as its own commit because it is the security-relevant step across all three writers and is worth being able to bisect or revert on its own)\n\npick 71eb591 docs: document show, save, patch and delete; aska 0.3.0\n\n(Reordering 71eb591 after ffbe6b4 is conflict-free: ffbe6b4 touches none of README.md, skills/operator/SKILL.md, scripts/smoke.mjs, package*.json, .claude-plugin/plugin.json or tests/skills/skills.test.ts. Both fixups sit directly after the commit they fold into, so no reordering is needed there.)"
+  },
+  "investigate": [
+    {
+      "what": "Check out each proposed commit in a scratch worktree and run the build and tests (npm test, plus the smoke script) at each one.",
+      "why": "A buildable, passing step at every commit is what makes the restored history worth having for bisect. I could only read the stats, not run them. Watch most closely the steps where persona.mjs (a bundled copy of src) must match its sources.",
+      "tools": ["git worktree", "npm test", "node scripts/smoke.mjs"]
+    }
+  ]
+}

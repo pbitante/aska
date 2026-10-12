@@ -1,0 +1,11 @@
+{
+  "name": "aska",
+  "version": "0.7.1",
+  "description": "Swappable reviewer personas built from reusable, role-neutral concern units.",
+  "author": {
+    "name": "Peter Bitante"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/pbitante/aska",
+  "homepage": "https://github.com/pbitante/aska/tree/main/panel#readme"
+}

@@ -1,0 +1,1014 @@
+{
+ "_note": "Recorded 2026-10-10 from Paseo 0.11.2. 'explore' = a live stream (Explore sub-agent, start+completion pairs); 'guardian' = the real aska:panelist guardian timeline wrapped as timeline updates (completed items only). File contents and message text stripped.",
+ "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+ "explore": [
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "provider": "claude",
+     "title": "Explore",
+     "description": "panelist fixture run",
+     "status": "running",
+     "createdAt": "2026-10-10T19:08:43.340Z",
+     "updatedAt": "2026-10-10T19:08:43.340Z",
+     "toolCallId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "cwd": null,
+     "subtitle": null,
+     "parentSubagentId": null
+    }
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "user_message",
+     "text": "\u2026"
+    },
+    "timestamp": "2026-10-10T19:08:43.341Z",
+    "seq": 1,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "provider": "claude",
+     "title": "Explore",
+     "description": "panelist fixture run",
+     "status": "running",
+     "createdAt": "2026-10-10T19:08:43.340Z",
+     "updatedAt": "2026-10-10T19:08:50.424Z",
+     "toolCallId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "cwd": null,
+     "subtitle": "Explore \u00b7 Haiku 4.5",
+     "parentSubagentId": null
+    }
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "assistant_message",
+     "text": "\u2026",
+     "messageId": "msg_011Cfu5m1x4poXXzGKjpCBAT"
+    },
+    "timestamp": "2026-10-10T19:08:50.801Z",
+    "seq": 2,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "provider": "claude",
+     "title": "Explore",
+     "description": "panelist fixture run",
+     "status": "running",
+     "createdAt": "2026-10-10T19:08:43.340Z",
+     "updatedAt": "2026-10-10T19:08:51.123Z",
+     "toolCallId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "cwd": null,
+     "subtitle": "Explore \u00b7 Haiku 4.5 \u00b7 11.3k tokens",
+     "parentSubagentId": null
+    }
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01AgQ9C7J7dDmE6xDJsLqTrZ",
+     "name": "ToolSearch",
+     "detail": {
+      "type": "unknown",
+      "input": {
+       "query": "select:Grep,Glob",
+       "max_results": 5
+      },
+      "output": []
+     },
+     "status": "running",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:51.132Z",
+    "seq": 3,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01AgQ9C7J7dDmE6xDJsLqTrZ",
+     "name": "ToolSearch",
+     "detail": {
+      "type": "unknown",
+      "input": {
+       "query": "select:Grep,Glob",
+       "max_results": 5
+      },
+      "output": ""
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:51.172Z",
+    "seq": 4,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "assistant_message",
+     "text": "\u2026",
+     "messageId": "msg_011Cfu5mbAamDm9enB2btQrU"
+    },
+    "timestamp": "2026-10-10T19:08:57.709Z",
+    "seq": 5,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "provider": "claude",
+     "title": "Explore",
+     "description": "panelist fixture run",
+     "status": "running",
+     "createdAt": "2026-10-10T19:08:43.340Z",
+     "updatedAt": "2026-10-10T19:08:58.225Z",
+     "toolCallId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "cwd": null,
+     "subtitle": "Explore \u00b7 Haiku 4.5 \u00b7 13k tokens",
+     "parentSubagentId": null
+    }
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01CACf19xQsd3rv5fDnQoZVG",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runs/archive.ts"
+     },
+     "status": "running",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:58.232Z",
+    "seq": 6,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01CACf19xQsd3rv5fDnQoZVG",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runs/archive.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:58.278Z",
+    "seq": 7,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_016nZB3qpFjyy6H3GBDhuh1L",
+     "name": "Bash",
+     "detail": {
+      "type": "shell",
+      "command": "grep -r \"rename\" /home/u/project/aska-paseo/server"
+     },
+     "status": "running",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:58.738Z",
+    "seq": 8,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01JHacATW7t1mYM6cSPqP85W",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runs/store.ts"
+     },
+     "status": "running",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:59.017Z",
+    "seq": 9,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01JHacATW7t1mYM6cSPqP85W",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runs/store.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:59.051Z",
+    "seq": 10,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "provider": "claude",
+     "title": "Explore",
+     "description": "panelist fixture run",
+     "status": "running",
+     "createdAt": "2026-10-10T19:08:43.340Z",
+     "updatedAt": "2026-10-10T19:08:59.448Z",
+     "toolCallId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "cwd": null,
+     "subtitle": "Explore \u00b7 Haiku 4.5 \u00b7 13.1k tokens",
+     "parentSubagentId": null
+    }
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01278P1tunx9fovD5rSkWdEz",
+     "name": "Bash",
+     "detail": {
+      "type": "shell",
+      "command": "find /home/u/project/aska-paseo/tests/server -name \"*.test.ts\""
+     },
+     "status": "running",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:59.452Z",
+    "seq": 11,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_016nZB3qpFjyy6H3GBDhuh1L",
+     "name": "Bash",
+     "detail": {
+      "type": "shell",
+      "command": "grep -r \"rename\" /home/u/project/aska-paseo/server",
+      "output": ""
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:59.830Z",
+    "seq": 12,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01278P1tunx9fovD5rSkWdEz",
+     "name": "Bash",
+     "detail": {
+      "type": "shell",
+      "command": "find /home/u/project/aska-paseo/tests/server -name \"*.test.ts\"",
+      "output": ""
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T19:08:59.835Z",
+    "seq": 13,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "provider": "claude",
+     "title": "Explore",
+     "description": "panelist fixture run",
+     "status": "running",
+     "createdAt": "2026-10-10T19:08:43.340Z",
+     "updatedAt": "2026-10-10T19:09:03.365Z",
+     "toolCallId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "cwd": null,
+     "subtitle": "Explore \u00b7 Haiku 4.5 \u00b7 17.8k tokens",
+     "parentSubagentId": null
+    }
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "assistant_message",
+     "text": "\u2026",
+     "messageId": "msg_011Cfu5nEKyQbTndWzs5eqvi"
+    },
+    "timestamp": "2026-10-10T19:09:03.368Z",
+    "seq": 14,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+    "provider": "claude",
+    "item": {
+     "type": "assistant_message",
+     "text": "\u2026",
+     "messageId": "msg_011Cfu5ncx1v7NJwsPJMH5vE"
+    },
+    "timestamp": "2026-10-10T19:09:07.507Z",
+    "seq": 15,
+    "epoch": "b495af5d-3da4-46e8-b3a2-9ad7f94ba308"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "provider": "claude",
+     "title": "Explore",
+     "description": "panelist fixture run",
+     "status": "completed",
+     "createdAt": "2026-10-10T19:08:43.340Z",
+     "updatedAt": "2026-10-10T19:09:07.550Z",
+     "toolCallId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "cwd": null,
+     "subtitle": "Explore \u00b7 Haiku 4.5 \u00b7 17.8k tokens",
+     "parentSubagentId": null
+    }
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "provider": "claude",
+     "title": "Explore",
+     "description": "panelist fixture run",
+     "status": "completed",
+     "createdAt": "2026-10-10T19:08:43.340Z",
+     "updatedAt": "2026-10-10T19:09:07.551Z",
+     "toolCallId": "toolu_01VbUjyZRbEeckoqFd9zznR4",
+     "cwd": null,
+     "subtitle": "Explore \u00b7 Haiku 4.5 \u00b7 18.3k tokens",
+     "parentSubagentId": null
+    }
+   }
+  }
+ ],
+ "guardian": [
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "parentSubagentId": null,
+     "provider": "claude",
+     "title": "aska:panelist",
+     "description": "panelist aska:guardian",
+     "status": "running",
+     "createdAt": "2026-10-10T15:42:24.187Z",
+     "updatedAt": "2026-10-10T15:42:24.187Z",
+     "toolCallId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+     "cwd": "/home/u/project/aska-paseo"
+    }
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "user_message",
+     "text": "\u2026",
+     "messageId": "efa3edd9-53b1-4e06-b61f-554cc4a1c3fe"
+    },
+    "timestamp": "2026-10-10T15:42:24.187Z",
+    "seq": 1,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01XEpopfoxgLnRmczYQXF7Uz",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/tmp/aska-panel-OZIwJw/files.txt",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:26.235Z",
+    "seq": 3,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01FhQnk2WAyah19myohnerCR",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/handlers.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:27.423Z",
+    "seq": 5,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01HysXTcQzWraFV4NvtDPJNM",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runs/archive.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:27.937Z",
+    "seq": 7,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01GL577VGiwiDfAVWAHe4Xa1",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runs/store.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:28.404Z",
+    "seq": 9,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01He9VTWaEitwDyyL3qaiRjn",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runs/handlers.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:28.759Z",
+    "seq": 11,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01WqxXt5wQ4n1V3SUWvd8VhM",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runs/paths.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:29.126Z",
+    "seq": 13,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01Ltz8Q3HMYn1Z2Bj2vJwJk3",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/runner.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:37.026Z",
+    "seq": 15,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_017oKu3RJt6SWB1xVrcUzK18",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/server/aska.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:37.467Z",
+    "seq": 17,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01GCchCGAJZ5tifdC6ES4ZU6",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/index.server.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:37.802Z",
+    "seq": 19,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01VYsjqiEKfmbmzheaMDAYq3",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/client/logic/forms.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:45.721Z",
+    "seq": 21,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_017dbvy9norjNXoTdkGaonsR",
+     "name": "Grep",
+     "detail": {
+      "type": "search",
+      "query": "force|confirm|Alert|expectHash|conflict",
+      "toolName": "grep",
+      "content": "",
+      "numFiles": 0
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:46.441Z",
+    "seq": 23,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01YVksjW3QYpqDhN2cSsHBcQ",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/client/FormScreen.tsx",
+      "content": "",
+      "offset": 80,
+      "limit": 120
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:48.655Z",
+    "seq": 25,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01FvnLEb1EXTPLeW3xrDSkom",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/client/FormScreen.tsx",
+      "content": "",
+      "offset": 55,
+      "limit": 27
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:51.721Z",
+    "seq": 27,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01RZzy7dS7Md7Xg3VDWGMATB",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/client/query.ts",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:52.043Z",
+    "seq": 29,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01UmJomqhGJezQAFa5pHuR6J",
+     "name": "Grep",
+     "detail": {
+      "type": "search",
+      "query": "concurren|partial|\\.old|Promise\\.all|crash",
+      "toolName": "grep",
+      "content": "",
+      "numFiles": 0
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:55.300Z",
+    "seq": 31,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01GgR8WgTSmMJLgEyZ9ZcDCs",
+     "name": "Read",
+     "detail": {
+      "type": "read",
+      "filePath": "/home/u/project/aska-paseo/client/run/RunScreen.tsx",
+      "content": "",
+      "offset": 1
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:42:55.767Z",
+    "seq": 33,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "tool_call",
+     "callId": "toolu_01BCjK8yaXA4syPrqV2P8CaR",
+     "name": "Grep",
+     "detail": {
+      "type": "search",
+      "query": "RUN_ID|RUN_DIR_NAME|runIdFor|function digest",
+      "toolName": "grep",
+      "content": "",
+      "numFiles": 0
+     },
+     "status": "completed",
+     "error": null
+    },
+    "timestamp": "2026-10-10T15:43:15.029Z",
+    "seq": 35,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "assistant_message",
+     "text": "\u2026"
+    },
+    "timestamp": "2026-10-10T15:43:36.897Z",
+    "seq": 36,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "timeline",
+    "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+    "subagentId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+    "provider": "claude",
+    "item": {
+     "type": "assistant_message",
+     "text": "\u2026",
+     "messageId": "df8fbd9f-3033-4526-8fc1-8d24ac4f0785"
+    },
+    "timestamp": "2026-10-10T15:43:46.581Z",
+    "seq": 37,
+    "epoch": "guardian-epoch"
+   }
+  },
+  {
+   "type": "agent.provider_subagents.update",
+   "payload": {
+    "kind": "upsert",
+    "subagent": {
+     "id": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+     "parentAgentId": "ab638b3a-23ac-4537-9ae4-d0fd224eaef5",
+     "parentSubagentId": null,
+     "provider": "claude",
+     "title": "aska:panelist",
+     "description": "panelist aska:guardian",
+     "status": "completed",
+     "createdAt": "2026-10-10T15:42:24.187Z",
+     "updatedAt": "2026-10-10T15:43:46.581Z",
+     "toolCallId": "toolu_01Jue2EXmGFLXvtfC4mQTijf",
+     "cwd": "/home/u/project/aska-paseo"
+    }
+   }
+  }
+ ]
+}

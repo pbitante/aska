@@ -1,0 +1,1 @@
+Create a persona named security-reviewer for our web API. It should care most about security and data integrity, then edge cases; glance at observability; and resist raising code-style or naming issues. It's skeptical: assume every input is hostile. When security conflicts with anything else, security wins. Save it in the project scope.

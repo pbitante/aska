@@ -1,0 +1,12 @@
+{
+  "name": "aska",
+  "description": "Marketplace for the aska reviewer-persona plugin.",
+  "owner": { "name": "Peter Bitante" },
+  "plugins": [
+    {
+      "name": "aska",
+      "source": "./panel",
+      "description": "Swappable reviewer personas built from reusable, role-neutral concern units."
+    }
+  ]
+}

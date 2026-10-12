@@ -1,0 +1,61 @@
+{
+  "persona": "aska:tester",
+  "verdict": "proceed-with-conditions",
+  "conditions": [
+    "Add a save (or checkInPlace) test where another file in the library already has an error before the save, and assert the save still writes and that error does not appear in the output. Right now nothing proves the baseline comparison that the commit message claims.",
+    "Add a patch test that sets one field on an existing file and compares the whole result byte-for-byte with the expected text, so key order and the untouched frontmatter and body are proven after a real edit, not only after an empty patch."
+  ],
+  "findings": [
+    {
+      "unit": "aska:test-evidence",
+      "severity": "medium",
+      "claim": "The baseline comparison in checkInPlace has no test. That comparison is what lets you save while some unrelated file is already broken, and the commit message claims it ('diagnostics compared to a baseline'). If the `!baseline.has(keyOf(d))` filter were removed, no test would fail.",
+      "evidence": "src/author/check.ts:52-74 computes `baseline` from the real scopes and drops errors already in it from `broken`. Every fixture in tests/cli/author.test.ts (authorFiles) and tests/author/check.test.ts (files) is a clean library: check.test.ts:17 even asserts there are no errors. So each test passes the same way with or without the baseline filter. Without the filter, one pre-existing broken file anywhere in the visible scopes would block every save, patch and delete. The spec's §6 item 'a child persona broken by a unit change is caught' is also not tested as written: the cross-file save test (author.test.ts:223) changes a parent persona, not a unit.",
+      "suggestion": "Add a fixture with a pre-existing error in another file, such as a second panel that seats an unknown persona. Assert that saving an unrelated valid unit exits 0 with written: true and no diagnostic for that panel. Also assert that a new error in the same file still blocks the save, which proves the filter compares keys and doesn't just hide every error."
+    },
+    {
+      "unit": "aska:test-evidence",
+      "severity": "medium",
+      "claim": "Patch claims to keep 'comments, key order and untouched content byte-for-byte'. That is proven byte-for-byte only for an empty patch. After a real edit, the tests check only that a few substrings are present, so a reordering or reformatting regression would still pass.",
+      "evidence": "tests/author/patch.test.ts:67-76 checks byte identity with `{}` as the patch, which proves the yaml Document round-trip on shipped files. But every non-empty patch test (patch.test.ts:21-47, author.test.ts:331-339) asserts with `toContain` or `toMatch`: 'name: p # the p persona', 'description: New.', 'secondary: [b]', '## Stance\\nCareful.'. If an edit moved `description` after `units`, or changed blank lines between untouched sections, all of those would still pass. Spec §6 lists 'preserves comments, key order, untouched keys and untouched sections' as its own test item.",
+      "suggestion": "Use `expect(r.raw).toBe(<P with only the description line changed>)` for a set, and do the same for one section replacement on a body with three sections, so the untouched sections are compared exactly."
+    },
+    {
+      "unit": "aska:edge-cases",
+      "severity": "low",
+      "claim": "A dangling symlink causes problems in two places. Inside the scope's personas folder, it probably makes checkInPlace throw, so every save, patch and delete in that scope is refused with a misleading E_WRITE ('Check permissions on …'). As the target itself, writeAtomic replaces the link with a regular file, which contradicts the 'link survives' claim.",
+      "evidence": "src/author/check.ts:58 copies the folder with `cpSync(src, dst, { recursive: true, dereference: true })`. Dereferencing a link whose target is missing should fail with ENOENT. src/cli/author.ts:73-77 catches that and reports `writeFault(e, dirname(path))`, which suggests checking permissions on the target folder, even though the cause is a different file (or a full tmpdir). In src/author/files.ts:42, `existsSync(path)` is false for a dangling link, so `target = path`, and renameSync replaces the link. The symlink tests (author.test.ts:245-308) cover only links that resolve.",
+      "suggestion": "Skip or report broken links during staging with a clear diagnostic. Use lstatSync instead of existsSync before deciding whether the target is a link. Add one test for each case."
+    },
+    {
+      "unit": "aska:edge-cases",
+      "severity": "low",
+      "claim": "--expect-hash is check-then-act. The hash is compared, then a temporary registry is copied and checked, then the file is renamed into place, with no lock. Two writers in that window can both pass the check, and the second silently overwrites the first.",
+      "evidence": "src/cli/author.ts:58-82: staleCheck(path, expectHash), then checkInPlace (copies and parses the whole scope, which is not instant), then writeAtomic. Nothing re-reads the file just before the rename. For a single-user CLI paired with an editor this is a narrow window, but the spec calls this optimistic concurrency (A5).",
+      "suggestion": "Repeat the hash check just before writeAtomic, or document that the guarantee is best-effort. No test is needed for a true race, but a test should show that the second of two saves made from the same hash is refused."
+    },
+    {
+      "unit": "aska:edge-cases",
+      "severity": "low",
+      "claim": "Some unusual states have defined behaviour but no test: E_NO_SCOPE when the project .claude folder is the user folder; E_NO_SCOPE for patch and delete; saving a file that has no frontmatter or no name field; and a stale refusal on save leaving the file untouched.",
+      "evidence": "The droppedClaudeDir branch at src/author/files.ts:18-20 is never exercised. E_NO_SCOPE is tested only for save (author.test.ts:215). The name check at author.ts:64-71 is skipped when `name` is missing, so that case relies on checkInPlace's own diagnostics, which no test covers. The save E_STALE test (author.test.ts:188-194) checks the diagnostic code but not that the file is unchanged. The patch version (author.test.ts:341-349) does check that."
+    }
+  ],
+  "cleared": [
+    "aska:maintainability"
+  ],
+  "not_applicable": [],
+  "sections": {},
+  "investigate": [
+    {
+      "what": "Run `npm run check` at b1511b8: typecheck, vitest, smoke, build, and the persona.mjs drift diff.",
+      "why": "This review read the tests but did not run them. The claims above assume the suite passes and that the committed bundle matches src.",
+      "tools": ["shell (node/npm)"]
+    },
+    {
+      "what": "In a scratch folder, create a dangling symlink in <scope>/personas/ and run `persona save unit z --scope user --file …`. Separately, make the target file itself a dangling symlink and run save.",
+      "why": "Confirms whether cpSync with dereference throws and blocks every write as E_WRITE, and whether writeAtomic replaces a dangling target link (edge-case finding 1).",
+      "tools": ["shell (node)", "filesystem"]
+    }
+  ]
+}

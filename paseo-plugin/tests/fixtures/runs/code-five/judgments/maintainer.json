@@ -1,0 +1,37 @@
+{
+  "persona": "aska:maintainer",
+  "verdict": "proceed-with-conditions",
+  "conditions": [
+    "Make check-in-place staging copy only what the Registry actually reads (top-level *.md regular files, links resolved), skipping dangling symlinks and subfolders, so one stray entry in a personas folder can't block every save/patch/delete in that scope. Or, at minimum, report a staging failure as its own diagnostic that names the entry it failed on, not as E_WRITE 'Check permissions on <personas dir>'."
+  ],
+  "findings": [
+    {
+      "unit": "aska:observability",
+      "severity": "medium",
+      "claim": "Any failure while building the staged copy (or any exception thrown by the resolvers during the check) is reported as E_WRITE 'could not write: … / Check permissions on <target dir>', though nothing was written and the cause is usually not permissions. Staging is also stricter than the Registry: it recursively copies the whole personas folder with dereference, so entries the Registry skips silently (a dangling symlink, a symlinked directory, an unreadable subfolder) can make every write in that scope fail with that misleading message.",
+      "evidence": "src/author/check.ts:136 `cpSync(src, dst, { recursive: true, dereference: true })` copies everything under personas/, while src/scopes/registry.ts:23-31,55 only reads top-level *.md entries that stat as regular files and quietly ignores dangling links. src/cli/author.ts:222-226 and :300-304 wrap checkInPlace in a catch-all that becomes writeFault(e, dirname(path)), and src/author/files.ts:54-57 always gives the fix 'Check permissions on <dir>'. The only E_WRITE test (tests/cli/author.test.ts:311) covers a read-only personas dir. No test covers a dangling or looping symlink in the folder.",
+      "suggestion": "Copy only the files Registry would list (reuse its filter), and give staging its own code or message (for example 'could not stage <entry> for checking: <error>'), so the person reading the output can tell 'the check couldn't run' from 'the write failed'."
+    },
+    {
+      "unit": "aska:security",
+      "severity": "low",
+      "claim": "save/patch write through a symlinked target to wherever it points, with no check that the real path stays inside the scope. A cloned, untrusted project could plant .claude/personas/<name>.persona.md as a link to a file outside the repo (for example ~/.bashrc), and a later `persona save … --scope project` would replace that file with persona markdown. The staged check also dereferences such links, so the target's contents are copied into tmpdir for the length of the check.",
+      "evidence": "src/author/files.ts:42 `const target = existsSync(path) && lstatSync(path).isSymbolicLink() ? realpathSync(path) : path;` then writes and renames onto `target`. Following links is deliberate (commit 'close symlink … gaps': 'writeAtomic now writes through a symlinked target so the link survives', for dotfiles setups such as stow and home-manager), and tests/cli/author.test.ts:245-310 covers that. Impact is limited: the user starts the write, the content must pass validation as a persona, unit or panel file, and the names are kebab-case only (src/cli/main.ts:333-336), so there's no path traversal through <name>.",
+      "suggestion": "Optionally refuse (or warn) in project scope when the link's real path falls outside the project's git root, while keeping the dotfiles behaviour for the user scope. At minimum, document in the README that writes follow symlinks."
+    }
+  ],
+  "cleared": [
+    "aska:maintainability"
+  ],
+  "not_applicable": [],
+  "sections": {},
+  "investigate": [
+    {
+      "what": "Put a dangling symlink (and, separately, a symlink to an ancestor directory) inside a scratch scope's personas/ folder, then run `persona save`, `patch` and `delete` against that scope.",
+      "why": "This confirms whether cpSync with dereference throws (ENOENT or ELOOP/ENAMETOOLONG) and blocks every write in the scope with a misleading E_WRITE 'Check permissions' message, while `validate` and `list` stay clean. That would make the observability finding a real operational failure rather than a theoretical one.",
+      "tools": [
+        "shell (node, ln -s) in a throwaway directory"
+      ]
+    }
+  ]
+}

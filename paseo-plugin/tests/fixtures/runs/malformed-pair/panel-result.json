@@ -1,0 +1,105 @@
+{
+  "question": "Should the change described in scenario.md ship?",
+  "panel": null,
+  "panelists": [
+    {
+      "persona": "guardian",
+      "status": "ok",
+      "judgment": {
+        "persona": "guardian",
+        "verdict": "stop",
+        "findings": [
+          {
+            "unit": "data-integrity",
+            "severity": "critical",
+            "claim": "The one-time UPDATE copy of fullname into display_name does not capture writes made to fullname during the migration window, and a partial failure of the unprotected UPDATE on 4M rows followed by an unconditional DROP COLUMN can permanently destroy un-migrated data.",
+            "evidence": "Migration: `ALTER TABLE users ADD COLUMN display_name TEXT; UPDATE users SET display_name = fullname; ALTER TABLE users DROP COLUMN fullname;` — the UPDATE runs outside a transaction on a 4 million row table, and the script proceeds to DROP COLUMN fullname regardless of whether the UPDATE fully/correctly completed.",
+            "suggestion": "Wrap the backfill in a transaction (or batched transactions with verification), add a count/checksum check that display_name is fully populated before dropping fullname, and keep writes dual-targeted (or use a trigger) during the transition window so concurrent updates to fullname are not lost."
+          },
+          {
+            "unit": "rollback-safety",
+            "severity": "critical",
+            "claim": "There is no down-migration and the schema/app-code cutover happens in a single deploy, making the change irreversible and unsafe for rolling deployments.",
+            "evidence": "Scenario states: 'There is no down-migration' and 'Application code is updated in the same deploy to read and write display_name' with fullname dropped in the same script. During a rolling deploy, old app instances still expecting fullname will break the moment the column is dropped, and rolling back the app deploy cannot restore fullname without a backup/down-migration.",
+            "suggestion": "Use an expand/contract pattern: ship the add-column + backfill + dual-write first, deploy app code that can read either column, verify in production, and only drop fullname in a later, separate, easily-abortable migration. Provide a tested down-migration or documented restore-from-backup procedure before the DROP COLUMN step ships."
+          },
+          {
+            "unit": "edge-cases",
+            "severity": "high",
+            "claim": "Concurrent writes to fullname during the migration window (between the UPDATE copy and the app/schema cutover) are silently lost.",
+            "evidence": "The UPDATE is a single point-in-time copy with no mechanism (trigger, dual-write, or lock) to capture subsequent writes to fullname before DROP COLUMN fullname executes; on a 4M-row production table this window can be long and concurrent profile edits are likely.",
+            "suggestion": "Add a trigger or dual-write logic to keep display_name and fullname in sync for the duration of the transition, or run the backfill as the very last step immediately before cutover with writes blocked/queued."
+          },
+          {
+            "unit": "scope-creep",
+            "severity": "medium",
+            "claim": "An unrelated optional `pronunciation` column is bundled into an already high-risk migration PR, increasing review surface and blast radius for no stated need.",
+            "evidence": "Scenario: 'The ticket asked only for the rename, but the PR also adds an optional pronunciation column \"while we're here.\"'",
+            "suggestion": "Split the pronunciation column into its own PR/migration so the risky rename can be reviewed, tested, and rolled back independently."
+          }
+        ],
+        "cleared": [],
+        "not_applicable": [],
+        "sections": {},
+        "investigate": [
+          {
+            "what": "Whether the migration runner wraps the entire script in an implicit transaction, and what happens to already-applied migration state if the process is killed mid-UPDATE.",
+            "why": "Determines actual blast radius of a partial-failure scenario; could not be verified from the scenario text alone.",
+            "tools": ["Access to migration framework config/docs", "Running the migration against a staging DB"]
+          },
+          {
+            "what": "The deployment topology (single-instance vs rolling/blue-green) and how long the dual-version window lasts.",
+            "why": "Determines how severe the old-code/new-schema mismatch window is in practice.",
+            "tools": ["Access to deployment/orchestration configuration", "Deployment logs or runbook"]
+          }
+        ]
+      }
+    },
+    {
+      "persona": "accelerator",
+      "status": "ok",
+      "judgment": {
+        "persona": "accelerator",
+        "verdict": "proceed-with-conditions",
+        "conditions": [
+          "Decouple the destructive step: deploy app code that can read/write display_name while fullname still exists (dual-write or fallback), then drop fullname only after confirming the new code path works in production. Don't ship the ADD+COPY+DROP as one irreversible migration bundled with the app cutover.",
+          "Run the backfill UPDATE in batches (or at least wrap row-range chunks in short transactions) instead of a single unbounded UPDATE outside a transaction on a 4M-row table, to avoid long locks/replication lag.",
+          "Drop the 'pronunciation' column addition from this PR; ship it separately if/when there's an actual ticket or use case for it."
+        ],
+        "findings": [
+          {
+            "unit": "rollback-safety",
+            "severity": "high",
+            "claim": "If anything goes wrong after deploy, there is no quick, safe way back: the column is dropped irrecoverably and app code is already pointed at the new column in the same release.",
+            "evidence": "Migration has 'no down-migration' and does ADD -> COPY -> DROP of fullname in one shot, with application code switched to display_name in the same deploy.",
+            "suggestion": "Split into add-column / dual-read-write / verify / drop-column as separate deploys, so a bad deploy can be rolled back by reverting app code without needing the dropped column back."
+          },
+          {
+            "unit": "scope-creep",
+            "severity": "low",
+            "claim": "The PR adds an unrelated 'pronunciation' column that the ticket never asked for.",
+            "evidence": "Scenario states: 'The ticket asked only for the rename, but the PR also adds an optional pronunciation column \"while we're here\".'",
+            "suggestion": "Ship the rename alone; file the pronunciation column as its own ticket/PR."
+          },
+          {
+            "unit": "user-value",
+            "severity": "medium",
+            "claim": "No concrete user-facing benefit is named for this change beyond an internal field rename; users see the same name, just under a renamed column.",
+            "evidence": "The change is described purely as a schema rename ('rename users.fullname to users.display_name') with application code updated to match; no new capability or visible fix is described.",
+            "suggestion": "If this rename unblocks a planned feature (e.g., supporting display names distinct from legal names), state that explicitly and ship it in the same release as that feature so the value lands now, not later."
+          }
+        ],
+        "cleared": ["delivery-speed"],
+        "not_applicable": [],
+        "sections": {},
+        "investigate": [
+          {
+            "what": "Whether the production database/ORM enforces a maintenance window or has replicas sensitive to long-running unbatched UPDATEs on a 4M-row table.",
+            "why": "An unbatched UPDATE outside a transaction on a large table can cause replication lag or lock contention that affects live users; this can only be confirmed by running/profiling the migration against a prod-like dataset.",
+            "tools": ["database query/profiling access", "staging environment with representative data volume"]
+          }
+        ]
+      }
+    }
+  ]
+}
