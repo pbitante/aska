@@ -59,6 +59,10 @@ export const CAPTION_PITCH = CAPTION_W + 12;
 export const INNER_MIN = 100;
 export const RING_GAP = CAPTION_PITCH;
 const LABEL_X = 4;
+// A Tracks row's unit marker sits at the left of the label column, and the label starts after it.
+const MARKER_R = 4;
+export const MARKER_GAP = 4;
+const ROW_LABEL_X = LABEL_X + 2 * MARKER_R + MARKER_GAP;
 export const LABEL_W = 200;
 export const LABEL_H = 24;
 const ROW_H = 40;
@@ -129,6 +133,11 @@ function hasCaption(node: LayoutNode, tracks: boolean): boolean {
 // The room reserved below a node for its one-line caption, centred on it.
 function captionBox(node: LayoutNode): Bounds {
   return { x: node.x - CAPTION_W / 2, y: node.y + node.r + CAPTION_GAP, width: CAPTION_W, height: CAPTION_H };
+}
+
+// The same caption box relative to the node's own top-left corner, where FlowCanvas draws it.
+export function captionFrame(r: number): { left: number; top: number; width: number; height: number } {
+  return { left: r - CAPTION_W / 2, top: 2 * r + CAPTION_GAP, width: CAPTION_W, height: CAPTION_H };
 }
 
 // Every caption box in a layout: the nodes' captions, and Tracks' row labels.
@@ -350,7 +359,7 @@ export function liveCaptionRoom(mode: FlowMode, compact: boolean): boolean {
 function tracksLayout(model: FlowModel): FlowLayout {
   const n = model.panelists.length;
   const pitch = Math.max(STOP_MIN, n * (2 * DOT_R + 2) + 8);
-  const first = LABEL_X + LABEL_W + MIN_SPACING + pitch / 2;
+  const first = ROW_LABEL_X + LABEL_W + MIN_SPACING + pitch / 2;
   const last = first + (TRACK_STOPS.length - 1) * pitch;
   const stops = stopPositions(first, last);
   const nodes: LayoutNode[] = [];
@@ -369,8 +378,8 @@ function tracksLayout(model: FlowModel): FlowLayout {
   [...contested, ...quiet].forEach((u, k) => {
     const y = TRACKS_TOP + ROW_H * (k + 0.5);
     const isQuiet = u.cls === "none";
-    rows.push({ unit: u.id, label: u.label, x: LABEL_X, y, quiet: isQuiet });
-    nodes.push({ ...base, id: `u:${u.id}`, kind: "unit", x: LABEL_X + 4, y, r: 4, faded: true, tone: isQuiet ? "muted" : worstTone(u), label: u.label, ref: u.id });
+    rows.push({ unit: u.id, label: u.label, x: ROW_LABEL_X, y, quiet: isQuiet });
+    nodes.push({ ...base, id: `u:${u.id}`, kind: "unit", x: LABEL_X + MARKER_R, y, r: MARKER_R, faded: true, tone: isQuiet ? "muted" : worstTone(u), label: u.label, ref: u.id });
     if (isQuiet) return;
     for (const d of trackDots(u.cells, stops, DOT_R)) {
       nodes.push({

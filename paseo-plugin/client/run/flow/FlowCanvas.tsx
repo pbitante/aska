@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
-import { CAPTION_GAP, CAPTION_W, edgeBox, LABEL_H, LABEL_W, type FlowLayout, type LayoutEdge, type LayoutNode } from "../../logic/flow/layout";
+import { captionFrame, edgeBox, LABEL_H, LABEL_W, type FlowLayout, type LayoutEdge, type LayoutNode } from "../../logic/flow/layout";
 import type { Tone } from "../../logic/catalog";
 import { toneColor, type Theme } from "../../styles";
 import { DotFace } from "./DotFace";
@@ -126,6 +126,7 @@ function AnimatedNode({
   const d = node.r * 2;
   const isDot = node.kind === "dot";
   const inner = node.kind === "panelist" ? node.label : "";
+  const frame = captionFrame(node.r);
   return (
     <Animated.View
       pointerEvents={locked ? "none" : "auto"}
@@ -181,14 +182,13 @@ function AnimatedNode({
         </View>
       ) : null}
       {caption ? (
-        <Text
-          numberOfLines={1}
-          ellipsizeMode="tail"
-          pointerEvents="none"
-          style={{ position: "absolute", top: d + CAPTION_GAP, left: node.r - CAPTION_W / 2, width: CAPTION_W, textAlign: "center", fontSize: 11, color: theme.colors.foregroundMuted }}
-        >
-          {caption}
-        </Text>
+        // The box sets the caption's width. On web a one-line Text gets maxWidth: 100% of its
+        // containing block, which for an absolutely positioned Text is this node, only 2r wide.
+        <View pointerEvents="none" style={{ position: "absolute", left: frame.left, top: frame.top, width: frame.width }}>
+          <Text numberOfLines={1} ellipsizeMode="tail" style={{ textAlign: "center", fontSize: 11, color: theme.colors.foregroundMuted }}>
+            {caption}
+          </Text>
+        </View>
       ) : null}
     </Animated.View>
   );
