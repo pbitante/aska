@@ -3,7 +3,7 @@
 Each version's section is also its GitHub release notes (tag `aska-v<version>`). Print one with
 `node scripts/release-notes.mjs aska <version>` from the repo root.
 
-## 0.7.2 (unreleased)
+## 0.7.2 (2026-10-12)
 
 A patch release: kept runs can live somewhere else, and the git guard around them now covers
 bare-repo dotfiles.
