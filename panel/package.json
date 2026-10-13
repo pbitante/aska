@@ -1,6 +1,6 @@
 {
   "name": "aska",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Swappable reviewer personas built from reusable, role-neutral concern units.",
   "author": "Peter Bitante",
   "license": "GPL-3.0-or-later",

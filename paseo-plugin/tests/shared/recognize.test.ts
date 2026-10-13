@@ -182,6 +182,13 @@ describe("recognize: saved judgments", () => {
       name: "guardian",
     });
   });
+  it("keys a judgment saved under the row's canonical name by its short name", () => {
+    expect(recognize(write("w1", `${A}/judgments/aska:guardian.json`))).toEqual({ kind: "judgmentSaved", callId: "w1", dir: A, name: "guardian" });
+    expect(recognize(tool("w2", { type: "shell", command: `cat > '${A}/judgments/acme:red-team.json' <<'EOF'\n{}\nEOF`, output: "" }))).toMatchObject({
+      kind: "judgmentSaved",
+      name: "red-team",
+    });
+  });
   it("ignores unfinished writes, folders that aren't runs, and other files", () => {
     expect(recognize(write("w4", `${A}/judgments/guardian.json`, "running"))).toBeUndefined();
     expect(recognize(write("w5", "/home/u/project/judgments/guardian.json"))).toBeUndefined();

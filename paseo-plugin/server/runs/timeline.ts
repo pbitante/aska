@@ -1,5 +1,5 @@
 import type { RunActivity } from "../../shared/activity";
-import type { LiveRun } from "../../shared/recognize";
+import { shortKey, type LiveRun } from "../../shared/recognize";
 import { digest, type Timeline, type TimelineEvent } from "../../shared/runs";
 
 // The collector-sourced part of a run's timeline (starts, reads, searches, ends), before the
@@ -17,9 +17,6 @@ export interface JudgmentTime {
 }
 
 const KIND_ORDER: Record<TimelineEvent["kind"], number> = { "panelist-start": 0, read: 1, search: 1, judgment: 2, "panelist-end": 3, outcome: 4 };
-
-// The same rule as the client's shortPersona: "aska:guardian" → "guardian".
-const shortKey = (persona: string): string => persona.slice(persona.indexOf(":") + 1);
 
 const iso = (s: string): string | null => {
   const t = Date.parse(s);

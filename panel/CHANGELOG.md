@@ -3,6 +3,25 @@
 Each version's section is also its GitHub release notes (tag `aska-v<version>`). Print one with
 `node scripts/release-notes.mjs aska <version>` from the repo root.
 
+## 0.8.1 (unreleased)
+
+A cheaper chair (#2).
+
+**Changed**
+- **Panelists read their own prompt and brief:** the panel skill saves each persona prompt to
+  `<dir>/prompts/<name>.md` and gives each panelist only that path and the brief's. Before, the
+  chair copied every prompt and the brief into each panelist call, and again into each re-ask:
+  most of the chair's output tokens, which then stayed in its context for the rest of the run.
+- **One name per panelist:** the prompt file, the judgment file and `check-judgment` all use the
+  lineup row's `canonical` (`aska:tester`). Chairs used to pick a short or a canonical name.
+
+**Fixes**
+- **`compare` rejects a `model` with no `modelSource`** in `panel-result.json`. Before, such an
+  entry was recorded and tagged in the report with no source.
+- **Panel eval approver:** a Write through `..` after a folder that doesn't exist yet, such as
+  `aska-panel-x/nope/../../file`, is now denied. `realpath` can't resolve such a path, and the
+  folder check passed it while the Write landed outside.
+
 ## 0.8.0 (2026-10-13)
 
 Pick the model each panelist runs on, and see it in the report (#3).

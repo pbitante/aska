@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chmod, copyFile, lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type { RunActivity } from "../../shared/activity";
-import { assembleRun, recognize } from "../../shared/recognize";
+import { assembleRun, recognize, shortKey } from "../../shared/recognize";
 import { RUN_DIR_NAME, RUN_ID, comparisonSchema, digest, panelResultSchema, runIdFor, timelineSchema, type Comparison, type ImportCounts, type RunMeta, type Timeline } from "../../shared/runs";
 import { readRegular, readRegularJson } from "./files";
 import { lexicalRunDir, realRunDir, type RunPaths } from "./paths";
@@ -91,7 +91,7 @@ async function judgmentTimes(partial: string, realDir: string): Promise<Judgment
   for (const name of names) {
     try {
       const s = await lstat(join(realDir, "judgments", name));
-      if (s.isFile()) out.push({ panelist: basename(name, ".json"), at: s.mtime.toISOString() });
+      if (s.isFile()) out.push({ panelist: shortKey(basename(name, ".json")), at: s.mtime.toISOString() });
     } catch {
       // Gone from the source since the copy; leave it out.
     }

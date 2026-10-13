@@ -61,6 +61,14 @@ describe('panel eval permission approver', () => {
     expect(decide(dir, 'Write', { file_path: `${dir}/link/../x.txt` }).behavior).toBe('deny');
   });
 
+  it('denies a ".." escape after a folder that does not exist, which realpath cannot resolve', () => {
+    const dir = mkdtemp('aska-panel-');
+    // realpath fails on the missing "nope", so only a check of the raw path can see the "..":
+    // the Write tool would resolve it to a file outside the aska-panel- folder.
+    expect(decide(dir, 'Write', { file_path: `${dir}/nope/../../escaped.txt` }).behavior).toBe('deny');
+    expect(decide(dir, 'Write', { file_path: `${dir}/nope/../x.txt` }).behavior).toBe('deny');
+  });
+
   describe('kept-run store under PERSONA_HOME', () => {
     const RUN = '20261013T101500Z-abc123';
     function home(): { home: string; run: string } {

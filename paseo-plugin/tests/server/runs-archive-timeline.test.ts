@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -84,6 +84,15 @@ describe("timeline.json", () => {
     ]);
     expect(t.events.find((e) => e.kind === "read")?.target).toBe("/repo/a.ts");
     expect((await deps.store.get(out!.id))!.meta.timelineDigest).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("keys a judgment file saved under its canonical name by the short name", async () => {
+    const { deps, paths, dir, timelineOf } = setup();
+    renameSync(join(dir, "judgments", "planner.json"), join(dir, "judgments", "aska:planner.json"));
+    const [out] = await archiveFromTimeline(turn(dir, PANELISTS), { ...deps, paths, activityOf: () => TWO() });
+    const judged = timelineOf(out!.id)!.events.filter((e) => e.kind === "judgment").map((e) => e.panelist);
+    expect(judged).toContain("planner");
+    expect(judged).not.toContain("aska:planner");
   });
 
   it("is not written when no sub-agent matches a panelist, or without a collector", async () => {

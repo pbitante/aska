@@ -141,16 +141,21 @@ For a `change` subject whose head commit exists (a branch, PR, commit or commit 
 
 Say how many panelists will run and roughly what they will read. Don't ask for confirmation. A proposal the user accepted in step 1a already counts as confirmation.
 
-For each panelist, get its prompt with `prompt <name> --panel`. Then launch every panelist at once: **all** the `aska:panelist` subagent calls **must** be in one message, one call per panelist. Never launch one panelist and wait for its reply before launching the next. Give each `aska:panelist` call the description `panelist <canonical>`, exactly, using the row's `canonical`. Each call's task is the persona prompt, then a line `---`, then the brief.
+For each panelist, save its prompt to a file with `prompt <canonical> --panel > <dir>/prompts/<canonical>.md` (after `mkdir -p <dir>/prompts`), and check that the command exited 0. `<canonical>` is always the row's `canonical`, such as `aska:tester`, in every file name and command for that panelist, never a short name or the name the user typed. Never print a prompt or the brief into your own context to pass it on: each panelist reads both files itself, and copying them costs tokens on every call and every turn after it. Then launch every panelist at once: **all** the `aska:panelist` subagent calls **must** be in one message, one call per panelist. Never launch one panelist and wait for its reply before launching the next. Give each `aska:panelist` call the description `panelist <canonical>`, exactly, using the row's `canonical`. Each call's task is these two lines, with the literal paths, and nothing else:
+
+```
+Persona prompt: <dir>/prompts/<canonical>.md
+Brief: <dir>/brief.md
+```
 
 For each row, pass the row's `model` as the call's `model` parameter when it isn't `null`, and no `model` otherwise. When you say how many panelists will run, name each one on another model and why, from its `modelSource`: `tester on sonnet (you asked)` for `panelist` or `run`, `guardian on opus (saved panel)` for `panel`, `historian on haiku (persona default)` for `persona`.
 
 ## 4. Collect and validate
 
-For each reply, before saving it strip one surrounding code fence and nothing else, then save it to `<dir>/judgments/<name>.json` and run `check-judgment <name> --file <that file>` — pass the saved file with `--file`, never stdin.
+For each reply, before saving it strip one surrounding code fence and nothing else, then save it to `<dir>/judgments/<canonical>.json` and run `check-judgment <canonical> --file <that file>` — pass the saved file with `--file`, never stdin.
 
 - **Valid:** status `ok`.
-- **Invalid:** re-ask once, with a fresh `aska:panelist` call containing the persona prompt, the brief, the previous reply, the violations, and an instruction to reply with the raw JSON object only — no code fence. If it is still invalid, status `malformed`, keeping the violations. The re-ask call's description is `panelist <canonical> re-ask`. The re-ask runs on the same model as the first call.
+- **Invalid:** re-ask once, with a fresh `aska:panelist` call whose task is the same two lines, then a line `Previous reply: <dir>/judgments/<canonical>.json`, then the violations and an instruction to reply with the raw JSON object only — no code fence. Save the new reply over the same file. If it is still invalid, status `malformed`, keeping the violations. The re-ask call's description is `panelist <canonical> re-ask`. The re-ask runs on the same model as the first call.
 - **The subagent timed out or failed:** status `timeout` or `error`, with the exact reason, for example "timed out after 10 min".
 - **A panelist marked `ok` whose persona no longer resolves:** `compare` demotes it to `error` with reason "persona does not resolve — fix the name before re-running". Don't blindly re-run that entry; fix the name yourself if you can tell what it should be, otherwise ask the user.
 

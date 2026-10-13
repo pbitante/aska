@@ -96,6 +96,7 @@ export function parsePanelResult(text: string): { result?: PanelResult; diagnost
     if (modelSource !== null && !(MODEL_SOURCES as readonly unknown[]).includes(modelSource)) return fail(`panelists[${i}] has an unknown modelSource "${String(modelSource)}"`);
     if (modelSource === 'session' && model !== null) return fail(`panelists[${i}] names model "${model}" but says it ran on the session model`);
     if (modelSource !== null && modelSource !== 'session' && model === null) return fail(`panelists[${i}] says its model came from "${modelSource}" but names no model`);
+    if (model !== null && modelSource === null) return fail(`panelists[${i}] names model "${model}" but no modelSource`);
     panelists.push({
       persona: p.persona,
       status,
