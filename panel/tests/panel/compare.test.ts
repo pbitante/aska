@@ -426,6 +426,7 @@ describe('parsePanelResult models', () => {
     ['an unknown source', { model: 'sonnet', modelSource: 'Session' }, 'panelists[0] has an unknown modelSource "Session"'],
     ['a model on the session', { model: 'sonnet', modelSource: 'session' }, 'panelists[0] names model "sonnet" but says it ran on the session model'],
     ['a named source without a model', { model: null, modelSource: 'run' }, 'panelists[0] says its model came from "run" but names no model'],
+    ['a model without a source', { model: 'sonnet' }, 'panelists[0] names model "sonnet" but no modelSource'],
   ])('rejects %s', (_label, extra, message) => {
     const r = one(extra);
     expect(r.result).toBeUndefined();

@@ -72,11 +72,11 @@ describe('plugin packaging', () => {
     expect(operator).toContain('ASKA_RUNS_DIR');
   });
 
-  it('is version 0.8.0 everywhere', () => {
-    expect(JSON.parse(readFileSync(join(repo, '.claude-plugin/plugin.json'), 'utf8')).version).toBe('0.8.0');
-    expect(JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version).toBe('0.8.0');
+  it('is version 0.8.1 everywhere', () => {
+    expect(JSON.parse(readFileSync(join(repo, '.claude-plugin/plugin.json'), 'utf8')).version).toBe('0.8.1');
+    expect(JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version).toBe('0.8.1');
     const lock = JSON.parse(readFileSync(join(repo, 'package-lock.json'), 'utf8'));
-    expect([lock.version, lock.packages[''].version]).toEqual(['0.8.0', '0.8.0']);
+    expect([lock.version, lock.packages[''].version]).toEqual(['0.8.1', '0.8.1']);
   });
 
   it('documents the gate commands and --checks in the operator skill', () => {
@@ -215,8 +215,14 @@ describe('aska:panelist agent', () => {
 
   it('reads only the materials the brief lists, and adopts the persona prompt fully', () => {
     const body = readFileSync(path, 'utf8');
-    expect(body).toContain('Read only the materials the brief lists');
+    expect(body).toContain('read only the materials the brief lists');
     expect(body).toContain('Adopt it fully');
+  });
+
+  it('reads its persona prompt and the brief from the files its task names, before anything else', () => {
+    const body = readFileSync(path, 'utf8');
+    expect(body).toMatch(/Your task names files/);
+    expect(body).toMatch(/read the persona prompt file and the brief in full before anything else/i);
   });
 });
 
@@ -462,6 +468,24 @@ describe('panel skill', () => {
     expect(t).toContain("pass the row's `model` as the call's `model` parameter when it isn't `null`, and no `model` otherwise");
     expect(t).toContain('`historian on haiku (persona default)`');
     expect(t).toMatch(/re-ask[^.]*same model/i);
+  });
+
+  it('saves each persona prompt to a file and passes panelists paths, never the prompt or brief text', () => {
+    const t = text();
+    expect(t).toContain('`prompt <canonical> --panel > <dir>/prompts/<canonical>.md`');
+    expect(t).toMatch(/never print a prompt or the brief into your own context/i);
+    expect(t).toContain('Persona prompt: <dir>/prompts/<canonical>.md');
+    expect(t).toContain('Brief: <dir>/brief.md');
+    expect(t).toContain('Previous reply: <dir>/judgments/<canonical>.json');
+    expect(t).not.toContain('Each call\'s task is the persona prompt, then a line `---`, then the brief.');
+    expect(t).not.toMatch(/call containing the persona prompt, the brief, the previous reply/);
+  });
+
+  it("names every panelist's files and checks by the row's canonical, never a short or typed name", () => {
+    const t = text();
+    expect(t).toContain('`<dir>/judgments/<canonical>.json`');
+    expect(t).toContain('`check-judgment <canonical> --file <that file>`');
+    expect(t).not.toMatch(/(prompts|judgments)\/<name>\./);
   });
 
   it('records model and modelSource in panel-result.json', () => {

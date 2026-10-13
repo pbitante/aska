@@ -9738,6 +9738,7 @@ function parsePanelResult(text) {
     if (modelSource !== null && !MODEL_SOURCES.includes(modelSource)) return fail2(`panelists[${i}] has an unknown modelSource "${String(modelSource)}"`);
     if (modelSource === "session" && model !== null) return fail2(`panelists[${i}] names model "${model}" but says it ran on the session model`);
     if (modelSource !== null && modelSource !== "session" && model === null) return fail2(`panelists[${i}] says its model came from "${modelSource}" but names no model`);
+    if (model !== null && modelSource === null) return fail2(`panelists[${i}] names model "${model}" but no modelSource`);
     panelists.push({
       persona: p.persona,
       status,
