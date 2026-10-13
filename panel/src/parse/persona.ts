@@ -10,11 +10,11 @@ import type {
   Section,
   UnitEntry,
 } from '../model/types';
-import { REF, checkName, hint, isPlainObject, severityValue, stringField, stringList, warnUnknownFields } from './fields';
+import { REF, checkName, hint, isPlainObject, modelField, severityValue, stringField, stringList, warnUnknownFields } from './fields';
 import { splitFrontmatter } from './frontmatter';
 import { sectionKey, splitSections } from './sections';
 
-const PERSONA_FIELDS = ['name', 'description', 'extends', 'units', 'judgment', 'capabilities', 'overrides'];
+const PERSONA_FIELDS = ['name', 'description', 'extends', 'model', 'units', 'judgment', 'capabilities', 'overrides'];
 const UNIT_KEYS = ['primary', 'secondary', 'deprioritized', 'exclude', 'primary_order'];
 const ALL_SETTINGS = ['threshold', 'add_questions', 'add_red_flags', 'note'];
 const TIER_SETTINGS: Record<EntryTier, readonly string[]> = {
@@ -103,6 +103,7 @@ export function parsePersona(file: string, raw: string): { persona?: PersonaDoc;
   if (ext !== undefined && !REF.test(ext)) {
     ds.push(err('E_FIELD_TYPE', `extends "${ext}" is not a valid persona reference`, loc(['extends']), 'Use a kebab-case name, or plugin:name'));
   }
+  const model = modelField(fm, file, ds);
 
   // units
   const units: UnitEntry[] = [];
@@ -341,6 +342,7 @@ export function parsePersona(file: string, raw: string): { persona?: PersonaDoc;
       description,
       extends: ext,
       extendsLoc: ext !== undefined ? loc(['extends']) : undefined,
+      model,
       units,
       primaryOrder,
       judgmentSections,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkPanelRun, followUpLineCount, followUpLineMismatches, hasUnrequestedRecommendation, parallelPanelistLaunch, reportSections } from '../../evals/panel/checks';
+import { checkPanelRun, evalEnv, findTempFolder, ignoreKeptRunChanges, followUpLineCount, followUpLineMismatches, hasUnrequestedRecommendation, costModelMismatches, panelistLaunchModels, panelistModelMismatches, parallelPanelistLaunch, reportSections } from '../../evals/panel/checks';
 import { trimmedRealTranscript } from './fixtures/panel-split-launch';
 
 // Claude Code's `stream-json` output never puts more than one content block per top-level
@@ -176,5 +176,125 @@ describe('panel eval checks', () => {
     const r = checkPanelRun({ ...good, verdicts: { guardian: 'stop', accelerator: 'stop' } });
     expect(r.problems).toEqual([]);
     expect(r.soft).toEqual(['verdicts did not differ (stop / stop)']);
+  });
+});
+
+describe('panelist models', () => {
+  const launch = (description: string, model?: string) => ({
+    type: 'assistant', parent_tool_use_id: null,
+    message: { id: description, content: [{ type: 'tool_use', name: 'Agent', input: { subagent_type: 'aska:panelist', description, ...(model ? { model } : {}) } }] },
+  });
+  const expected = [
+    { persona: 'aska:guardian', model: 'haiku', modelSource: 'run' },
+    { persona: 'aska:accelerator', model: 'sonnet', modelSource: 'panelist' },
+  ];
+  const good = [
+    { persona: 'aska:guardian', model: 'haiku', modelSource: 'run' },
+    { persona: 'aska:accelerator', model: 'sonnet', modelSource: 'panelist' },
+  ];
+
+  it('reads each launch model by canonical persona, re-asks included', () => {
+    expect(panelistLaunchModels([launch('panelist aska:guardian', 'haiku'), launch('panelist aska:guardian re-ask', 'haiku'), launch('panelist aska:accelerator')]))
+      .toEqual({ 'aska:guardian': ['haiku', 'haiku'], 'aska:accelerator': [null] });
+  });
+
+  it('finds nothing wrong in a matching run', () => {
+    const launches = panelistLaunchModels([launch('panelist aska:guardian', 'haiku'), launch('panelist aska:accelerator', 'sonnet')]);
+    expect(panelistModelMismatches(good, launches, expected)).toEqual([]);
+  });
+
+  it('reports a wrong record, a launch without the expected model, and a missing entry that is also launched wrong, once each', () => {
+    const launches = panelistLaunchModels([launch('panelist aska:guardian'), launch('panelist aska:guardian re-ask'), launch('panelist aska:accelerator')]);
+    expect(panelistModelMismatches([{ persona: 'aska:guardian', model: 'opus', modelSource: 'run' }], launches, expected)).toEqual([
+      'aska:guardian was recorded on opus (run), expected haiku (run)',
+      'aska:guardian was launched without a model, expected haiku',
+      'aska:accelerator has no entry in panel-result.json',
+      'aska:accelerator was launched without a model, expected sonnet',
+    ]);
+  });
+
+  it('reports a panelist that was never launched', () => {
+    const launches = panelistLaunchModels([launch('panelist aska:guardian', 'haiku')]);
+    expect(panelistModelMismatches(good, launches, expected)).toEqual(['aska:accelerator was never launched as aska:panelist']);
+  });
+});
+
+describe('costModelMismatches', () => {
+  const byModel = (...ids: string[]) => ({ byModel: Object.fromEntries(ids.map((i) => [i, {}])) });
+
+  it('compares families, so a full --model id counts as its family', () => {
+    expect(costModelMismatches(byModel('claude-sonnet-5-5', 'claude-haiku-5-5'), 'claude-sonnet-5-5')).toEqual([]);
+    expect(costModelMismatches(byModel('claude-sonnet-5-5'), 'claude-sonnet-5-5')).toEqual(['the cost rows include no haiku model']);
+  });
+
+  it('finds nothing wrong when the cost rows include a haiku model', () => {
+    expect(costModelMismatches(byModel('claude-sonnet-5-5', 'claude-haiku-5-5'), 'sonnet')).toEqual([]);
+  });
+
+  it('reports a missing haiku model', () => {
+    expect(costModelMismatches(byModel('claude-sonnet-5-5'), 'sonnet')).toEqual(['the cost rows include no haiku model']);
+    expect(costModelMismatches(byModel(), 'sonnet')).toEqual(['the cost rows include no haiku model']);
+  });
+
+  it("asks for no row for the eval session's own model, which its chair run always has", () => {
+    expect(costModelMismatches(byModel('claude-haiku-5-5'), 'sonnet')).toEqual([]);
+  });
+
+  it('asks for a sonnet row when the session runs on another model', () => {
+    expect(costModelMismatches(byModel('claude-opus-5-5', 'claude-haiku-5-5'), 'opus')).toEqual(['the cost rows include no sonnet model']);
+    expect(costModelMismatches(byModel('claude-opus-5-5', 'claude-haiku-5-5', 'claude-sonnet-5-5'), 'opus')).toEqual([]);
+  });
+});
+
+describe('evalEnv', () => {
+  it("drops the caller's ASKA_RUNS_DIR and sets the eval's own variables", () => {
+    const env = evalEnv({ PATH: '/bin', ASKA_RUNS_DIR: '/home/me/real-runs', PERSONA_HOME: '/x' }, '/tmp/home', '/tmp/p.json');
+    expect(env).not.toHaveProperty('ASKA_RUNS_DIR');
+    expect(env).toMatchObject({ PATH: '/bin', PERSONA_HOME: '/tmp/home', PERSONA_PLUGINS_JSON: '/tmp/p.json' });
+  });
+});
+
+describe('findTempFolder', () => {
+  const toolResult = (text: string) => ({ type: 'user', message: { content: [{ type: 'tool_result', content: text }] } });
+  const run = '/tmp/panel-eval-home-x1/.claude/aska/runs/20261013T101500Z-abc123';
+
+  it('finds an aska-panel-* folder named in the report footer', () => {
+    expect(findTempFolder('Kept at /tmp/aska-panel-Ab12Cd', [])).toBe('/tmp/aska-panel-Ab12Cd');
+  });
+
+  it('finds a kept-run folder named in the report footer', () => {
+    expect(findTempFolder(`Kept at ${run}`, [])).toBe(run);
+    expect(findTempFolder(`Kept at ${run}/`, [])).toBe(run);
+  });
+
+  it('falls back to a tool result when the report names none', () => {
+    expect(findTempFolder('', [toolResult('/tmp/aska-panel-Zz9')])).toBe('/tmp/aska-panel-Zz9');
+    expect(findTempFolder('no footer', [toolResult(`{"id":"x","dir":"${run}"}`)])).toBe(run);
+  });
+
+  it('takes the last folder named, and undefined when there is none', () => {
+    expect(findTempFolder(`first ${run} then /tmp/aska-panel-Q1`, [])).toBe('/tmp/aska-panel-Q1');
+    expect(findTempFolder('nothing here', [toolResult('nor here')])).toBeUndefined();
+  });
+
+  it('ignores a runs/ folder whose name is not a run id', () => {
+    expect(findTempFolder('/tmp/h/.claude/aska/runs/not-a-run', [])).toBeUndefined();
+  });
+});
+
+describe('ignoreKeptRunChanges', () => {
+  it('drops changes under .claude/aska/runs/ and keeps the rest', () => {
+    expect(
+      ignoreKeptRunChanges([
+        'added .claude/aska/runs/20261013T101500Z-abc123/meta.json',
+        'modified .claude/aska/runs/20261013T101500Z-abc123/judgments/guardian.json',
+        'added .claude/aska/runs.md',
+        'added .claude/aska/runs/stray.md',
+        'added .claude/aska/runs/not-a-run/x.md',
+        'added .claude/aska/other/x.md',
+        'added .claude/personas/x.persona.md',
+        'removed notes.md',
+      ]),
+    ).toEqual(['added .claude/aska/runs.md', 'added .claude/aska/runs/stray.md', 'added .claude/aska/runs/not-a-run/x.md', 'added .claude/aska/other/x.md', 'added .claude/personas/x.persona.md', 'removed notes.md']);
   });
 });

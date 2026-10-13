@@ -85,6 +85,7 @@ shape. It lives at `personas/<name>.persona.md`:
 name: example
 description: One line on what this persona weighs and why you'd use it.
 extends: base-persona
+model: sonnet
 units:
   primary:
     - edge-cases
@@ -127,6 +128,8 @@ When its units conflict, which one wins and on what basis.
 ## Context
 Any further `##` section is extra prose, rendered word for word under its own heading.
 ```
+
+`model` (optional) is the model the persona's panelist runs on by default (see Panels).
 
 ### Tiers
 
@@ -295,11 +298,12 @@ found:
 | `persona validate <name>` | checks one persona, including a stale-render check for just that persona |
 | `persona explain <name>` | prints the effective persona, the clash report and the rendered prompt |
 | `persona render <name> [--scope project\|user]` | writes the output style and panel subagent for a persona |
-| `persona list [units\|personas\|panels] [--json]` | lists every unit, persona and panel in every scope; `--json` for machine-readable output (persona rows include `units`, the persona's resolved units by tier) |
+| `persona list [units\|personas\|panels] [--json]` | lists every unit, persona and panel in every scope; `--json` for machine-readable output (persona rows include `units`, the persona's resolved units by tier, and `model`) |
 | `persona prompt <name> --panel [--checks <targets.json>]` | prints a persona's panel prompt; with `--checks`, it also lists the review targets and the `checks` contract |
 | `persona check-judgment <name> [--file <path>] [--checks <targets.json>]` | validates a judgment (read from `<path>` or stdin) against a persona's contract, and against the targets when `--checks` is given |
 | `persona check-evidence [--file <path>]` | validates an investigator's evidence (markdown, read from `<path>` or stdin): its four sections, in order, each with content |
 | `persona compare [--file <path>] [--json] [--record]` | compares a panel's judgments (panel-result JSON, read from `<path>` or stdin) and reports agreement, disagreement and follow-ups; `--record` also updates the `meta.json` of the kept run that holds `<path>` |
+| `persona lineup --json [--model <m>] <names…>` | resolves a lineup (a saved panel, optionally with `<member>@<m>` tags, or 2 to 6 personas, each optionally `@<m>`) into the panelists to launch and the model each runs on, with where the model came from |
 | `persona runs new` | creates a kept panel-run folder under `~/.claude/aska/runs/<id>/` (or `$ASKA_RUNS_DIR/<id>/`) with its `meta.json` and prints its path |
 | `persona runs list [--json]` | lists kept panel runs, newest first; `--json` gives each run's `meta.json` plus its `path` |
 | `persona targets --from <file.md> [--out <targets.json>]` | extracts a step file's `## Adversarial review targets` as numbered targets (`T1`, `T2.1`, …) |
@@ -383,6 +387,8 @@ and reports where and why they disagree. Invoke it with `/aska:panel`:
 /aska:panel guardian accelerator : Is this migration safe to ship?
 /aska:panel ship : Is this migration safe to ship?
 /aska:panel : Is this migration safe to ship?
+/aska:panel --model sonnet code : Is this migration safe to ship?
+/aska:panel code tester@sonnet : Is this migration safe to ship?
 ```
 
 - Naming two or more personas runs exactly those.
@@ -395,6 +401,8 @@ and reports where and why they disagree. Invoke it with `/aska:panel`:
 After an ad-hoc run, the report offers to save the lineup: reply `save <name>` and it writes
 `<name>.panel.md` to your project (or user) personas folder. It never overwrites an existing
 panel, and it warns you before shadowing one from another scope.
+
+Each panelist runs on the first model that applies: the per-run model, then the saved panel's `models`, then the persona's `model`, then your session's model. The per-run model is `<persona>@<m>` (or `<panel> <member>@<m>`, or "tester on sonnet"), then `--model <m>` for everyone. The report tags each panelist's model whenever any of them ran on a named one, so a split between models is visible. Runs made before 0.8.0 show no models.
 
 A panel never runs with fewer than 2 personas; for a single persona, use `/aska:operator`
 or `/aska:author` instead.
@@ -418,11 +426,11 @@ Any prose here is added to the brief as the panel's notes.
 
 `personas` lists 2 to 6 persona references (bare or `plugin:name`); listing the same
 persona twice, even under different spellings that both resolve to it, is an error.
-`models` is optional: it runs a listed persona's panelist on `haiku`, `sonnet` or `opus`
+`models` is optional: it runs a listed persona's panelist on a model alias such as `haiku`, `sonnet` or `opus`
 instead of your session's model, to make a panel cheaper. These are model aliases the Agent
-tool accepts; aska may add others as the tool does. Name the persona exactly as
+tool accepts. Name the persona exactly as
 `personas` lists it. You can also ask for one run, for example
-`/aska:panel code : … (historian on haiku)`.
+`/aska:panel code historian@haiku : …`.
 
 ### The report
 
@@ -478,7 +486,7 @@ marked, so an under-weighted finding doesn't pass unnoticed.
 
 ## Gate
 
-`/aska:gate <step-file> [<base>..<head>] [--records <dir>]` runs the independent adversarial review at the end
+`/aska:gate <step-file> [<base>..<head>] [--records <dir>] [--model <m>]` runs the independent adversarial review at the end
 of a build step. A step file is a markdown file describing one build step. The gate needs only
 its `## Adversarial review targets` section, a bullet list of what to attack; an
 `## Implementation check` section (a code block of commands the reviewer may run) and a
@@ -493,7 +501,7 @@ the change through its own concerns.
    list is prose, not targets. A wrapped line that only begins with another number (`3. …`)
    stays part of its target, and a numbered line indented under a bullet continues that
    bullet.
-2. One fresh reviewer on Opus judges the change as `aska:gate`, from a neutral brief (the step
+2. One fresh reviewer (Opus by default) judges the change as `aska:gate`, from a neutral brief (the step
    file, its spec, the diff and the commits), with the targets in its prompt
    (`persona prompt gate --panel --checks targets.json`). It may run the step's implementation
    check, in a throwaway worktree. Like the investigator, it runs as its own subagent,
@@ -501,6 +509,7 @@ the change through its own concerns.
    tools that act outside the session. Bash stays, because the gate runs commands: its
    instructions and your permission prompts keep it out of your checkout, and it runs the
    branch's code, so gate untrusted changes only in a disposable container or VM.
+   Pass `--model <m>` to run the gate on another model, or set `model:` on your own `gate` persona.
 3. Its judgment answers each target in `checks` — `holds`, `broken` (tied to a finding with
    `check`), or `deferred` (with `needs`: a device, production data, a person) — and
    `persona check-judgment gate --checks targets.json` validates that every target is

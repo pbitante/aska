@@ -114,10 +114,10 @@ describe('comparePanel', () => {
 
   it('lists verdicts in input order, including non-ok panelists', () => {
     expect(c.verdicts).toEqual([
-      { persona: 'g', status: 'ok', verdict: 'stop', reason: null, tension: null },
-      { persona: 'x', status: 'ok', verdict: 'proceed-with-conditions', reason: null, tension: null },
-      { persona: 'y', status: 'ok', verdict: 'proceed', reason: null, tension: null },
-      { persona: 'z', status: 'timeout', verdict: null, reason: 'timed out after 10 min', tension: null },
+      { persona: 'g', status: 'ok', verdict: 'stop', reason: null, tension: null, model: null, modelSource: null },
+      { persona: 'x', status: 'ok', verdict: 'proceed-with-conditions', reason: null, tension: null, model: null, modelSource: null },
+      { persona: 'y', status: 'ok', verdict: 'proceed', reason: null, tension: null, model: null, modelSource: null },
+      { persona: 'z', status: 'timeout', verdict: null, reason: 'timed out after 10 min', tension: null, model: null, modelSource: null },
     ]);
   });
 
@@ -327,5 +327,108 @@ describe('formatComparison', () => {
     expect(condSection).toContain('- x (condition): ship behind a flag');
     expect(condSection).toContain('- w (missing): need more data');
     expect(condSection).toContain('- w (Risk notes): risk-text');
+  });
+});
+
+describe('formatComparison back-compat', () => {
+  const old = result([
+    { persona: 'g', status: 'ok', judgment: gJ },
+    { persona: 'x', status: 'ok', judgment: xJ },
+    { persona: 'y', status: 'ok', judgment: yJ },
+    { persona: 't', status: 'timeout', reason: 'timed out after 10 min' },
+  ]);
+
+  it('prints a run without models exactly as 0.7.2 did', () => {
+    expect(formatComparison(comparePanel(old, resolve))).toMatchSnapshot();
+  });
+
+  it('gives mixedModels false for a run that records no models', () => {
+    expect(comparePanel(old, resolve).mixedModels).toBe(false);
+  });
+
+  it('prints an all-session run exactly as a run without models', () => {
+    const session = result(old.panelists.map((p) => ({ ...p, model: null, modelSource: 'session' as const })));
+    expect(formatComparison(comparePanel(session, resolve))).toBe(formatComparison(comparePanel(old, resolve)));
+  });
+});
+
+describe('models', () => {
+  const mixed = result([
+    { persona: 'g', status: 'ok', judgment: gJ, model: 'opus', modelSource: 'panel' },
+    { persona: 'x', status: 'ok', judgment: xJ, model: 'haiku', modelSource: 'panelist' },
+    { persona: 'y', status: 'ok', judgment: yJ, model: null, modelSource: 'session' },
+  ]);
+
+  it('carries model and modelSource into verdict rows, after tension', () => {
+    const c = comparePanel(mixed, resolve);
+    expect(Object.keys(c.verdicts[0]!)).toEqual(['persona', 'status', 'verdict', 'reason', 'tension', 'model', 'modelSource']);
+    expect(c.verdicts.map((v) => [v.model, v.modelSource])).toEqual([['opus', 'panel'], ['haiku', 'panelist'], [null, 'session']]);
+  });
+
+  it('puts mixedModels after ok, and counts only ok panelists, with null as its own value', () => {
+    const c = comparePanel(mixed, resolve);
+    expect(Object.keys(c).slice(-2)).toEqual(['ok', 'mixedModels']);
+    expect(c.mixedModels).toBe(true);
+    const sameOk = result([
+      { persona: 'g', status: 'ok', judgment: gJ, model: 'sonnet', modelSource: 'run' },
+      { persona: 'x', status: 'ok', judgment: xJ, model: 'sonnet', modelSource: 'run' },
+      { persona: 't', status: 'timeout', reason: 'r', model: 'opus', modelSource: 'panelist' },
+    ]);
+    expect(comparePanel(sameOk, resolve).mixedModels).toBe(false);
+    const sessionAndNamed = result([
+      { persona: 'g', status: 'ok', judgment: gJ, model: null, modelSource: 'session' },
+      { persona: 'x', status: 'ok', judgment: xJ, model: 'sonnet', modelSource: 'run' },
+    ]);
+    expect(comparePanel(sessionAndNamed, resolve).mixedModels).toBe(true);
+  });
+
+  it('tags the header, verdicts and disagreeing cells when models are mixed, but not agreeing cells', () => {
+    const text = formatComparison(comparePanel(mixed, resolve));
+    expect(text.split('\n')[1]).toBe('Models: g [opus], x [haiku], y [session model]');
+    expect(text).toMatch(/^- g — stop \[opus\]$/m);
+    expect(text).toMatch(/^- y — proceed \[session model\]$/m);
+    const disagree = text.slice(text.indexOf('Where they disagree'), text.indexOf('Where they agree'));
+    expect(disagree).toMatch(/ \[haiku\]$/m);
+    const agree = text.slice(text.indexOf('Where they agree'), text.indexOf('Outside their scope'));
+    expect(agree).not.toMatch(/\[(opus|haiku|session model)\]/);
+  });
+
+  it('tags verdicts but not cells when everyone ran on one named model', () => {
+    const same = result(mixed.panelists.map((p) => ({ ...p, model: 'sonnet', modelSource: 'run' as const })));
+    const text = formatComparison(comparePanel(same, resolve));
+    expect(text).toMatch(/^- g — stop \[sonnet\]$/m);
+    const disagree = text.slice(text.indexOf('Where they disagree'), text.indexOf('Where they agree'));
+    expect(disagree).not.toContain('[sonnet]');
+  });
+
+  it("says 'not recorded' beside recorded models", () => {
+    const partly = result([
+      { persona: 'g', status: 'ok', judgment: gJ, model: 'opus', modelSource: 'panel' },
+      { persona: 'x', status: 'ok', judgment: xJ },
+    ]);
+    expect(formatComparison(comparePanel(partly, resolve)).split('\n')[1]).toBe('Models: g [opus], x [not recorded]');
+  });
+});
+
+describe('parsePanelResult models', () => {
+  const one = (extra: Record<string, unknown>) =>
+    parsePanelResult(JSON.stringify({ question: 'q', panel: null, panelists: [{ persona: 'g', status: 'timeout', reason: 'r', ...extra }] }));
+
+  it('reads absent fields as null, and accepts any model name', () => {
+    expect(one({}).result!.panelists[0]).toMatchObject({ model: null, modelSource: null });
+    expect(one({ model: 'gpt-5', modelSource: 'panelist' }).diagnostics).toEqual([]);
+  });
+
+  it.each([
+    ['an empty model', { model: '  ', modelSource: 'run' }, 'panelists[0] "model" must be a non-empty string or null'],
+    ['a numeric model', { model: 5, modelSource: 'run' }, 'panelists[0] "model" must be a non-empty string or null'],
+    ['a padded model', { model: ' sonnet', modelSource: 'run' }, 'panelists[0] "model" has surrounding spaces'],
+    ['an unknown source', { model: 'sonnet', modelSource: 'Session' }, 'panelists[0] has an unknown modelSource "Session"'],
+    ['a model on the session', { model: 'sonnet', modelSource: 'session' }, 'panelists[0] names model "sonnet" but says it ran on the session model'],
+    ['a named source without a model', { model: null, modelSource: 'run' }, 'panelists[0] says its model came from "run" but names no model'],
+  ])('rejects %s', (_label, extra, message) => {
+    const r = one(extra);
+    expect(r.result).toBeUndefined();
+    expect(r.diagnostics.map((d) => [d.code, d.message])).toEqual([['E_PANEL_RESULT', message]]);
   });
 });

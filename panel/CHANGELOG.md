@@ -3,6 +3,43 @@
 Each version's section is also its GitHub release notes (tag `aska-v<version>`). Print one with
 `node scripts/release-notes.mjs aska <version>` from the repo root.
 
+## 0.8.0 (2026-10-13)
+
+Pick the model each panelist runs on, and see it in the report (#3).
+
+**New**
+- **A persona's default model:** `model: haiku` (or another model alias such as `sonnet` or `opus`) in a persona's
+  frontmatter runs its panelist on that model unless something more specific says otherwise.
+  It's inherited through `extends`, shown by `explain`, listed by `list personas --json`, and
+  settable with `patch`.
+- **Per-run models:** `/aska:panel --model sonnet …` puts every panelist on one model, and
+  `<persona>@<model>` puts one panelist on its own: `/aska:panel guardian tester@sonnet : …`.
+  A saved panel takes tags for its members, `/aska:panel code tester@sonnet : …`, and still runs
+  as that panel. Words work too ("tester on sonnet").
+- **Precedence:** a panelist's own tag, then `--model`, then the saved panel's `models`, then the
+  persona's `model`, then your session's model.
+- **`persona lineup --json [--model <m>] <names…>`:** resolves a lineup into the panelists to
+  launch and the model each runs on, with where it came from (`modelSource`). The panel skill
+  uses it for every run.
+- **Recorded models:** each `panel-result.json` entry records `model` and `modelSource`.
+  `compare` passes them on, and `compare --json` adds `mixedModels`. The report tags each
+  panelist's model whenever any ran on a named one, and tags the disagreements when the
+  models differ. Kept runs' `meta.json` rows record `model` and `modelSource`.
+- **The gate's model:** `/aska:gate … --model <m>`, or `model:` on your own `gate` persona.
+  Opus is still the default.
+- **Saving a lineup** keeps per-panelist models, and asks before saving a run-wide `--model`.
+
+**Compatibility**
+- Runs made before 0.8.0 compare and report exactly as before; they show no models.
+- `compare --json` gains keys (`model` and `modelSource` on verdict rows, `mixedModels` at the
+  end). No existing key changed.
+- Persona lineups now record each panelist by its canonical name (`aska:guardian`, not
+  `guardian`). A saved panel records each member as the panel lists it, and the panel by its
+  canonical name (`aska:code`).
+- A saved panel whose `models` uses `fable` needs aska 0.8.0 or later; earlier versions reject it.
+
+**Known gap:** aska-editor reads runs that carry models but doesn't show the models yet.
+
 ## 0.7.2 (2026-10-12)
 
 A patch release: kept runs can live somewhere else, and the git guard around them now covers

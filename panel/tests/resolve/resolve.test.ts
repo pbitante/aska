@@ -571,3 +571,29 @@ describe('resolvePersona: overrides, attribution, shadows', () => {
     expect(strip(resolvePersona(reg, 'kid'))).toBe(strip(resolvePersona(reg, 'kid')));
   });
 });
+
+describe('persona model', () => {
+  const files = (rootModel: string | null, childLines: string[] = []) => ({
+    'user/units/a.md': unitMd('a'),
+    'user/personas/root.md': personaMd(['name: root', 'description: R.', ...(rootModel ? [`model: ${rootModel}`] : []), 'units:', '  primary: [a]']),
+    'user/personas/child.md': personaMd(['name: child', 'extends: root', ...childLines], ''),
+    'user/personas/grandchild.md': personaMd(['name: grandchild', 'extends: child'], ''),
+  });
+  const modelOf = (f: Record<string, string>, ref: string) => resolvePersona(registryFor(f).reg, ref).effective!.model;
+
+  it('is null when no layer sets it', () => {
+    expect(modelOf(files(null), 'root')).toBeNull();
+  });
+
+  it('is inherited through two levels of extends', () => {
+    expect(modelOf(files('haiku'), 'grandchild')).toBe('haiku');
+  });
+
+  it("is replaced by a child's own model", () => {
+    expect(modelOf(files('haiku', ['model: opus']), 'grandchild')).toBe('opus');
+  });
+
+  it("doesn't clear the parent's model with an explicit null", () => {
+    expect(modelOf(files('haiku', ['model: null']), 'child')).toBe('haiku');
+  });
+});

@@ -1,5 +1,5 @@
 import type { Diagnostic } from '../diagnostics';
-import type { CapabilityKind, FileRef, Loc, OverrideValue, ScopeKind, Section, Severity, Shadow, Tier, UnitDoc } from './types';
+import type { CapabilityKind, FileRef, Loc, OverrideValue, PanelModel, ScopeKind, Section, Severity, Shadow, Tier, UnitDoc } from './types';
 
 export interface EffUnit {
   canonical: string;
@@ -44,6 +44,7 @@ export interface EffectivePersona {
   name: string;
   canonical: string;
   description: string;
+  model: PanelModel | null;
   source: string;
   sourceId: string;
   units: Record<Tier, EffUnit[]>;

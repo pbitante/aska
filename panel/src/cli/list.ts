@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { effectiveThreshold } from '../model/effective';
+import { effectiveThreshold, type EffectivePersona } from '../model/effective';
 import { cmp, type FileRef, type ScopeKind, type Severity, type Tier } from '../model/types';
 import { checkPanelFile } from '../panel/panels';
 import { splitFrontmatter } from '../parse/frontmatter';
@@ -42,6 +42,7 @@ interface PersonaRow extends RowBase {
   // overrides applied), or null when it doesn't resolve. Used by the panel skill to propose
   // a lineup.
   units: UnitsByTier | null;
+  model: string | null;
 }
 
 interface PanelRow extends RowBase {
@@ -98,9 +99,7 @@ function base(reg: Registry, f: FileRef, info: { data?: Record<string, unknown>;
   };
 }
 
-function unitsOf(reg: Registry, canonical: string): UnitsByTier | null {
-  const eff = resolvePersona(reg, canonical).effective;
-  if (!eff) return null;
+function unitsOf(eff: EffectivePersona): UnitsByTier {
   const brief = (tier: Tier): UnitBrief[] =>
     eff.units[tier].map((u) => ({ canonical: u.canonical, description: u.unit.description, threshold: effectiveThreshold(u) }));
   return { primary: brief('primary'), secondary: brief('secondary'), deprioritized: brief('deprioritized') };
@@ -114,7 +113,8 @@ export function listRows(reg: Registry): Listing {
   const personaRows = [...reg.all('persona')].sort(order).map((f): PersonaRow => {
     const info = inspect(f);
     const b = base(reg, f, info);
-    return { ...b, extends: str(info.data, 'extends'), units: b.shadowedBy ? null : unitsOf(reg, f.canonical) };
+    const eff = b.shadowedBy ? undefined : resolvePersona(reg, f.canonical).effective;
+    return { ...b, extends: str(info.data, 'extends'), units: eff ? unitsOf(eff) : null, model: eff?.model ?? null };
   });
   const panels = [...reg.all('panel')].sort(order).map((f): PanelRow => {
     const info = inspect(f);

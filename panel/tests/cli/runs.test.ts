@@ -182,6 +182,19 @@ describe('persona compare --record', () => {
     });
   });
 
+  it('records each panelist\'s model, and the new one after a re-run', () => {
+    const { exec } = runsCli();
+    const dir = exec('runs', 'new').out;
+    const file = join(dir, 'panel-result.json');
+    writeResult(dir, [{ ...twoOk[0], model: 'opus', modelSource: 'panel' }, twoOk[1]]);
+    exec('compare', '--file', file, '--json', '--record');
+    expect(readMeta(dir).meta!.panelists.map((p) => [p.persona, p.model, p.modelSource])).toEqual([['example', 'opus', 'panel'], ['base', null, null]]);
+    writeResult(dir, [{ ...twoOk[0], model: 'haiku', modelSource: 'panelist' }, twoOk[1]]);
+    exec('compare', '--file', file, '--json', '--record');
+    expect(readMeta(dir).meta!.panelists.map((p) => [p.persona, p.model, p.modelSource])).toEqual([['example', 'haiku', 'panelist'], ['base', null, null]]);
+    expect(readMeta(dir).meta!.schemaVersion).toBe(1);
+  });
+
   it('records an ok:false comparison and still exits 1', () => {
     const { exec } = runsCli();
     const dir = exec('runs', 'new').out;
@@ -190,8 +203,8 @@ describe('persona compare --record', () => {
     expect(r.code).toBe(1);
     expect(JSON.parse(r.out).ok).toBe(false);
     expect(readMeta(dir).meta!.panelists).toEqual([
-      { persona: 'example', status: 'ok', verdict: 'proceed-with-conditions' },
-      { persona: 'base', status: 'timeout', verdict: null },
+      { persona: 'example', status: 'ok', verdict: 'proceed-with-conditions', model: null, modelSource: null },
+      { persona: 'base', status: 'timeout', verdict: null, model: null, modelSource: null },
     ]);
   });
 
@@ -215,6 +228,19 @@ describe('persona compare --record', () => {
     expect(r.err).toMatch(/not recording/);
     expect(readFileSync(join(dir, 'panel-result.json'), 'utf8')).toContain('Ship?');
     expect(() => readFileSync(join(dir, 'meta.json'))).toThrow();
+  });
+
+  it('still reads a meta.json whose rows have no model', () => {
+    const { exec } = runsCli();
+    const dir = exec('runs', 'new').out;
+    writeResult(dir, twoOk);
+    exec('compare', '--file', join(dir, 'panel-result.json'), '--json', '--record');
+    const metaPath = join(dir, 'meta.json');
+    const m = JSON.parse(readFileSync(metaPath, 'utf8'));
+    m.panelists = m.panelists.map(({ model: _m, modelSource: _s, ...rest }: Record<string, unknown>) => rest);
+    writeFileSync(metaPath, JSON.stringify(m));
+    expect(readMeta(dir).meta).toBeDefined();
+    expect(exec('runs', 'list', '--json').out).toContain(dir);
   });
 
   it('rejects --record without --file, and on other commands', () => {

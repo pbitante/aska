@@ -42,6 +42,7 @@ These four headings are required and are the only ones allowed.
 name: example
 description: One line on what this persona weighs and why you'd use it.
 extends: base-persona            # optional; one parent
+model: sonnet                    # optional; default model for panels
 units:
   primary:                       # ranked, most important first; at most 7
     - edge-cases
@@ -85,6 +86,8 @@ When its units conflict, which wins (name the units).
 ## Context
 Any other `##` section is optional extra prose, included as written.
 ```
+
+`model` is optional: the model this persona's panelist runs on when nothing else says. It is inherited through `extends`, and a child's own `model` replaces it. A per-run override (`--model`, `<persona>@<m>`) and a saved panel's `models` both win over it. Only a `gate` persona's `model` affects `/aska:gate`. Set it only when the persona's concerns don't need the strongest model, for example `haiku` for a persona that reads commit history. `model: null` in a child does not clear an inherited model: null means "not set", and there is no way to force the session model in a child.
 
 **Settings allowed per tier:**
 - `primary`: `threshold`, `add_questions`, `add_red_flags`;

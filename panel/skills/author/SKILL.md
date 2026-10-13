@@ -24,7 +24,7 @@ Files go in `.claude/personas/` (project scope, shared through the repository) o
 
 ## New persona
 
-1. **Frame.** Ask what the persona is for: the decision or review it sits in on, and whose priorities it brings. Run `list personas --json`. If a close persona exists, offer to extend it (`extends: <name>`) instead of starting from scratch.
+1. **Frame.** Ask what the persona is for: the decision or review it sits in on, and whose priorities it brings. Run `list personas --json`. If a close persona exists, offer to extend it (`extends: <name>`) instead of starting from scratch. Offer `model` only when the user asks about cost or speed, and never propose one unasked.
 2. **Propose units.** Run `list units --json`. Draft a tiering, giving a one-line reason for each unit:
    - **primary**: ranked, at most 7. What this persona cares about most.
    - **secondary**: worth a glance.

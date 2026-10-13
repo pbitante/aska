@@ -1,11 +1,11 @@
 ---
 name: gate
-description: Run the independent adversarial gate on a build step. Extracts the step file's adversarial review targets, has one fresh Opus reviewer judge the change as the aska:gate persona, validates its judgment, and reports pass, pass with conditions, or fail. Use when the user asks to gate a step, run a step's adversarial review, or invokes /aska:gate.
+description: Run the independent adversarial gate on a build step. Extracts the step file's adversarial review targets, has one fresh reviewer (Opus by default) judge the change as the aska:gate persona, validates its judgment, and reports pass, pass with conditions, or fail. Use when the user asks to gate a step, run a step's adversarial review, or invokes /aska:gate.
 ---
 
 # gate
 
-One fresh reviewer, on Opus, judges one build step as the `aska:gate` persona. It answers every review target listed in the step file, then reviews the change through its own concerns. The CLI validates its judgment and decides the result; you report it.
+One fresh reviewer, on Opus unless the run or the gate persona names another model, judges one build step as the `aska:gate` persona. It answers every review target listed in the step file, then reviews the change through its own concerns. The CLI validates its judgment and decides the result; you report it.
 
 ## Tools
 
@@ -18,13 +18,16 @@ Run the CLI from the user's project directory:
 - `targets --from <step-file> --out <tmp>/targets.json`: the step's targets, numbered.
 - `prompt gate --panel --checks <tmp>/targets.json`: the gate's prompt, with the targets.
 - `check-judgment gate --file <tmp>/judgment.json --checks <tmp>/targets.json`: validate the judgment.
+- `list personas --json`: the gate persona's `model`, if it sets one.
 - `gate --file <tmp>/judgment.json --checks <tmp>/targets.json --json`: the result. It validates the judgment as the `gate` persona, whatever persona the judgment names, so it fails whenever `check-judgment gate` rejects it.
 
 Always pass `--file`; never pipe a judgment on stdin.
 
 ## 1. Inputs
 
-The user writes `/aska:gate <step-file> [<base>..<head>] [--records <dir>]`. If no step file is given, ask for it. `<records>` is `<dir>` when given, otherwise `.claude/aska/gates/<step-stem>/` in the project, where `<step-stem>` is the step file's name without `.md`. It's where step 8 saves gate records.
+The user writes `/aska:gate <step-file> [<base>..<head>] [--records <dir>] [--model <m>]`. If no step file is given, ask for it. `<records>` is `<dir>` when given, otherwise `.claude/aska/gates/<step-stem>/` in the project, where `<step-stem>` is the step file's name without `.md`. It's where step 8 saves gate records.
+
+`<model>` is `--model` if given, else the `model` of the gate persona's row in `list personas --json`, else `opus`. The gate persona's row is the one the bare name `gate` resolves to: a project or user `gate` when one exists (`scope` `project` or `user`, `shadowedBy: null`), otherwise `aska:gate`. If `--model` isn't one of `haiku`, `sonnet`, `opus` or `fable`, say so and stop. Never launch the reviewer without a `model`: the session's model is never the gate's.
 
 Without a range, work out the base: run `git rev-parse --verify -q origin/HEAD`; if it succeeds, the base is `git merge-base origin/HEAD HEAD`, otherwise `git merge-base main HEAD`. If that `merge-base` fails (no `origin/HEAD` and no `main`, or no common ancestor), say so and ask the user for an explicit `<base>..<head>` instead of guessing. Otherwise the range is `<base>..HEAD`.
 
@@ -50,13 +53,13 @@ The brief is neutral. It contains nothing from this conversation: no summary of 
 
 ## 4. Launch
 
-Say that the gate is launching and what it will read. Launch exactly one `aska:gate-reviewer` subagent with model `opus`, with the description `gate-reviewer`. Its task is the output of `prompt gate --panel --checks <tmp>/targets.json`, then a line `---`, then the contents of `brief.md`, and nothing else. Never use a general-purpose agent in its place: `aska:gate-reviewer` has no file-editing tools and can't act outside the session. Never reuse an agent from earlier in this session, and never the agent that implemented the step.
+Say that the gate is launching, what it will read, and its model, with the reason when it isn't `opus`: `on sonnet (--model)`, `on haiku (gate persona)`. Launch exactly one `aska:gate-reviewer` subagent with model `<model>`, with the description `gate-reviewer`. Its task is the output of `prompt gate --panel --checks <tmp>/targets.json`, then a line `---`, then the contents of `brief.md`, and nothing else. Never use a general-purpose agent in its place: `aska:gate-reviewer` has no file-editing tools and can't act outside the session. Never reuse an agent from earlier in this session, and never the agent that implemented the step.
 
 ## 5. Validate
 
 Strip one surrounding code fence and nothing else from the reply, save it to `<tmp>/judgment.json`, and run `check-judgment gate --file <tmp>/judgment.json --checks <tmp>/targets.json`.
 
-If it is invalid, re-ask once: a new `aska:gate-reviewer` subagent with model `opus` and the description `gate-reviewer re-ask`, whose task is the prompt, the brief, the previous reply, the violations, and "Reply with the raw JSON object only — no code fence." Save its reply over `judgment.json` the same way. If it is still invalid, go on: step 6 reports `fail` with the violations.
+If it is invalid, re-ask once: a new `aska:gate-reviewer` subagent with model `<model>` and the description `gate-reviewer re-ask`, whose task is the prompt, the brief, the previous reply, the violations, and "Reply with the raw JSON object only — no code fence." Save its reply over `judgment.json` the same way. If it is still invalid, go on: step 6 reports `fail` with the violations.
 
 If a subagent fails or times out, say so with the exact reason and stop. There is no result.
 
@@ -68,7 +71,7 @@ Run `gate --file <tmp>/judgment.json --checks <tmp>/targets.json --json`. It exi
 
 Sections, in order:
 
-1. **Header:** the step file, the range, and the number of targets, with how many hold, are broken and are deferred. When most are deferred, add that the run verified little.
+1. **Header:** the step file, the range, the model the reviewer ran on, and the number of targets, with how many hold, are broken and are deferred. When most are deferred, add that the run verified little.
 2. **Result:** `PASS`, `PASS WITH CONDITIONS` or `FAIL`.
 3. **Broken:** for each `broken` ID, the target's text, then each finding whose `check` is that ID: severity, unit, claim, evidence.
 4. **Deferred:** each `deferred` ID with its target text and `needs`.
@@ -94,7 +97,7 @@ Ask: "Save this gate record to `<records>`?", naming the actual folder. The user
 4. Print this snippet for the user to paste wherever they track what was verified (a traceability file, the plan, a PR description):
 
    ```markdown
-   - **Gate (aska, run <n>):** <RESULT> — broken: <IDs, or none>; deferred: <ID (needs), or none>. Record: `<records>/judgment-<n>.json`
+   - **Gate (aska, run <n>, <model>):** <RESULT> — broken: <IDs, or none>; deferred: <ID (needs), or none>. Record: `<records>/judgment-<n>.json`
    ```
 
 Never edit a traceability file, or any other file, yourself. Anyone can re-check a saved record later with `gate --file <records>/judgment-<n>.json --checks <records>/targets-<n>.json`.

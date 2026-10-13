@@ -1,6 +1,6 @@
 import { isMap, isScalar, isSeq, parseDocument, type Document } from 'yaml';
 import { err, warn, type Diagnostic } from '../diagnostics';
-import { SEVERITIES, TIERS, type FileKind, type Tier } from '../model/types';
+import { PANEL_MODELS, SEVERITIES, TIERS, isPanelModel, type FileKind, type Tier } from '../model/types';
 import { REF } from '../parse/fields';
 import { normalizeSource, splitFrontmatter } from '../parse/frontmatter';
 import { sectionKey } from '../parse/sections';
@@ -15,7 +15,7 @@ interface Patch {
 const OWNED: Record<FileKind, { fields: readonly string[]; sections: readonly string[] }> = {
   unit: { fields: ['description', 'applies_when', 'threshold'], sections: ['Looks for', 'Questions', 'Red flags', 'Good looks like'] },
   panel: { fields: ['description', 'personas'], sections: [''] },
-  persona: { fields: ['description', 'units.primary', 'units.secondary', 'units.deprioritized'], sections: ['Stance', 'Tie-breaking'] },
+  persona: { fields: ['description', 'model', 'units.primary', 'units.secondary', 'units.deprioritized'], sections: ['Stance', 'Tie-breaking'] },
 };
 // Settings the forms don't edit but must not drop while an entry stays in a tier that allows them.
 const KEPT: Record<Tier, readonly string[]> = { primary: ['add_questions', 'add_red_flags'], secondary: [], deprioritized: [] };
@@ -35,6 +35,7 @@ function checkValue(kind: FileKind, path: string, v: unknown): string | undefine
   if (path === 'extends') return typeof v === 'string' && REF.test(v) ? undefined : '"extends" must be a valid persona reference';
   if (path === 'threshold') return typeof v === 'string' && (SEVERITIES as readonly string[]).includes(v) ? undefined : `"threshold" must be one of ${SEVERITIES.join(', ')}`;
   if (path === 'personas') return Array.isArray(v) && v.every((x) => typeof x === 'string' && REF.test(x)) ? undefined : '"personas" must be a list of persona names';
+  if (path === 'model') return isPanelModel(v) ? undefined : `"model" must be one of ${PANEL_MODELS.join(', ')}`;
   if (path.startsWith('units.')) {
     if (!Array.isArray(v)) return `"${path}" must be a list of { ref, threshold?, note? }`;
     for (const e of v) {

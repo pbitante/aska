@@ -11,7 +11,7 @@ export const RUN_ID = /^\d{8}T\d{6}Z-[A-Za-z0-9]{6}$/;
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const ATTEMPTS = 5;
 
-interface RunPanelist { persona: string; status: string; verdict: string | null }
+interface RunPanelist { persona: string; status: string; verdict: string | null; model?: string | null; modelSource?: string | null }
 export interface RunMeta {
   schemaVersion: 1;
   id: string;
@@ -227,11 +227,14 @@ export function createRun(home: string, cwd: string, deps: RunDeps = {}): { dir:
 }
 
 const nullableString = (v: unknown): boolean => v === null || typeof v === 'string';
+const absentOrNullableString = (v: unknown): boolean => v === undefined || nullableString(v);
 const validPanelistRow = (v: unknown): boolean =>
   typeof v === 'object' && v !== null &&
   typeof (v as RunPanelist).persona === 'string' &&
   typeof (v as RunPanelist).status === 'string' &&
-  nullableString((v as RunPanelist).verdict);
+  nullableString((v as RunPanelist).verdict) &&
+  absentOrNullableString((v as RunPanelist).model) &&
+  absentOrNullableString((v as RunPanelist).modelSource);
 
 export function readMeta(dir: string): { meta?: RunMeta; reason?: string } {
   let data: unknown;
@@ -269,7 +272,7 @@ export function recordComparison(dir: string, c: Comparison, at: Date): string |
     ...meta,
     question: c.question,
     panel: c.panel,
-    panelists: c.verdicts.map((v) => ({ persona: v.persona, status: v.status, verdict: v.verdict })),
+    panelists: c.verdicts.map((v) => ({ persona: v.persona, status: v.status, verdict: v.verdict, model: v.model, modelSource: v.modelSource })),
     comparedAt: at.toISOString(),
   };
   try {

@@ -196,6 +196,7 @@ export function resolvePersona(reg: Registry, ref: string): Resolution {
       name: acc.name,
       canonical: top.file.canonical,
       description: acc.description,
+      model: acc.model ?? null,
       source: top.file.path,
       sourceId: inputId(top.file),
       units: acc.units,

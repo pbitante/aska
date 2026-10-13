@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { isatty } from 'node:tty';
 import { fileURLToPath } from 'node:url';
 import { runPluginList } from '../scopes/discover';
-import { parseArgv, run } from './main';
+import { needsPluginData, parseArgv, run } from './main';
 
 // The bundle lives at <plugin root>/skills/operator/scripts/persona.mjs.
 const selfPluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -24,8 +24,8 @@ const cwd = process.cwd();
 // --help and usage errors never need plugin data, so don't pay for spawning `claude` to get it.
 // `targets` reads only the step file, so it never needs plugin data either.
 const parsed = parseArgv(argv, cwd);
-const needsPlugins = (parsed.kind === 'command' && parsed.command !== 'targets') || parsed.kind === 'author';
-const pl = needsPlugins ? pluginList(parsed.cwd) : {};
+const needsPlugins = needsPluginData(parsed);
+const pl = needsPlugins && 'cwd' in parsed ? pluginList(parsed.cwd) : {};
 process.exitCode = run(argv, {
   cwd,
   home: process.env.PERSONA_HOME ?? homedir(),

@@ -220,6 +220,12 @@ describe('persona CLI', () => {
     expect(r.text).toContain('# Persona: example');
   });
 
+  it('explains a persona with a model, and leaves the line out without one', () => {
+    const withModel = cli({ ...exampleFiles(), 'user/personas/base.md': personaMd(['name: base', 'description: Base.', 'model: haiku', 'units:', '  primary: [scope-creep]']) });
+    expect(withModel.exec('explain', 'base').text).toMatch(/^panel tools: .*\nmodel:         haiku \(default for panels\)$/m);
+    expect(cli(exampleFiles()).exec('explain', 'base').text).not.toMatch(/^model:/m);
+  });
+
   it('renders into the project scope and detects staleness later', () => {
     const c = cli(exampleFiles());
     const r = c.exec('render', 'example');
@@ -565,7 +571,7 @@ describe('persona CLI', () => {
 describe('parseArgv: flag messages', () => {
   it('lists the same commands for a flag whichever command rejects it', () => {
     const message = (...argv: string[]) => (parseArgv(argv, '/x') as { message?: string }).message;
-    expect(message('validate', '--json')).toBe('--json is only accepted by list, runs list, compare, gate, show, save, patch and delete');
+    expect(message('validate', '--json')).toBe('--json is only accepted by list, lineup, runs list, compare, gate, show, save, patch and delete');
     expect(message('validate', '--file', 'f')).toBe(message('show', 'unit', 'a', '--file', 'f'));
     expect(message('validate', '--expect-hash', 'h')).toBe(message('show', 'unit', 'a', '--expect-hash', 'h'));
     expect(message('validate', '--force')).toBe(message('show', 'unit', 'a', '--force'));

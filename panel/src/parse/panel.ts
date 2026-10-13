@@ -1,10 +1,9 @@
 import { err, hasErrors, type Diagnostic } from '../diagnostics';
-import type { Loc } from '../model/types';
-import { REF, checkName, stringField, warnUnknownFields } from './fields';
+import { PANEL_MODELS, isPanelModel, type Loc, type PanelModel } from '../model/types';
+import { REF, checkName, hint, stringField, warnUnknownFields } from './fields';
 import { splitFrontmatter } from './frontmatter';
 
-export const PANEL_MODELS = ['haiku', 'sonnet', 'opus'] as const;
-export type PanelModel = (typeof PANEL_MODELS)[number];
+export { PANEL_MODELS, type PanelModel };
 
 export interface PanelDoc {
   name: string;
@@ -58,10 +57,11 @@ export function parsePanel(file: string, raw: string): { panel?: PanelDoc; diagn
         const loc = { file, line: fm.lineOf(['models', ref]) };
         if (!personas.some((p) => p.ref === ref)) {
           ds.push(err('E_PANEL_MODEL', `models names "${ref}", which is not in personas`, loc, 'Use a persona exactly as personas lists it'));
-        } else if (!(PANEL_MODELS as readonly unknown[]).includes(model)) {
-          ds.push(err('E_PANEL_MODEL', `models gives "${ref}" an unknown model ${JSON.stringify(model)}`, loc, `Use one of ${PANEL_MODELS.join(', ')}`));
+        } else if (!isPanelModel(model)) {
+          const fix = (typeof model === 'string' && hint(model, PANEL_MODELS)) || `Use one of ${PANEL_MODELS.join(', ')}`;
+          ds.push(err('E_PANEL_MODEL', `models gives "${ref}" an unknown model ${JSON.stringify(model)}`, loc, fix));
         } else {
-          models[ref] = model as PanelModel;
+          models[ref] = model;
         }
       }
     }

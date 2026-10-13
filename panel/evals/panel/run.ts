@@ -7,7 +7,7 @@ import { validateJudgment } from '../../src/judgment/validate';
 import { comparePanel, parsePanelResult, type PanelResult } from '../../src/panel/compare';
 import { resolvePersona } from '../../src/resolve/resolve';
 import { Registry } from '../../src/scopes/registry';
-import { checkPanelRun, parallelPanelistLaunch, type PanelRunInput } from './checks';
+import { checkPanelRun, costModelMismatches, evalEnv, findTempFolder, ignoreKeptRunChanges, panelistLaunchModels, panelistModelMismatches, parallelPanelistLaunch, type ExpectedModel, type PanelRunInput } from './checks';
 import { diffSnapshots, snapshotGitTree, snapshotTree } from '../author/checks';
 import { costLine, sourceCost } from '../cost/tokens';
 
@@ -15,10 +15,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..');
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
+const mixedModels = args.includes('--mixed-models');
 const mi = args.indexOf('--model');
 const model = mi >= 0 && args[mi + 1] ? args[mi + 1]! : 'sonnet';
 for (const a of args) {
-  if (a.startsWith('--') && a !== '--dry-run' && a !== '--model') {
+  if (a.startsWith('--') && a !== '--dry-run' && a !== '--model' && a !== '--mixed-models') {
     console.error(`unknown flag ${a}`);
     process.exit(2);
   }
@@ -29,23 +30,37 @@ const ISOLATION = ['--setting-sources', '', '--strict-mcp-config', '--no-session
 const TOOLS = ['--allowedTools', 'Read,Write,Glob,Grep,Bash(node *),Bash(mktemp *),Bash(mkdir *),Agent,Task,Skill'];
 // Claude Code asks for permission on a Write outside the current project (and, separately, on
 // anything under `.claude/`) even with these tools pre-allowed; this MCP tool answers those
-// prompts, approving only the `aska-panel-*` temp folder the panel skill creates for itself with
-// `mktemp -d -t aska-panel-XXXXXX` (see evals/panel/approve-tmp.mjs). The temp *project* below is
+// prompts, approving only the kept-run folder the panel skill creates in PERSONA_HOME (`runs new`)
+// or the `aska-panel-*` temp folder it falls back to (`mktemp -d -t aska-panel-XXXXXX`); see
+// evals/panel/approve-tmp.mjs. The temp *project* below is
 // never approved, so any write the model makes there is caught only by the snapshot diff — same
 // reasoning as the author eval's unnarrowed `Bash(node *)` (see evals/author/README.md).
-const approver = JSON.stringify({ mcpServers: { approver: { command: 'node', args: [join(here, 'approve-tmp.mjs')] } } });
-const APPROVE = ['--mcp-config', approver, '--permission-prompt-tool', 'mcp__approver__approve'];
+// PERSONA_HOME is set in the server's own `env` rather than left to inheritance, because the
+// approver needs it to recognise the kept-run folder and an MCP stdio server may get only a
+// reduced environment.
+const approve = (home: string) => [
+  '--mcp-config',
+  JSON.stringify({ mcpServers: { approver: { command: 'node', args: [join(here, 'approve-tmp.mjs')], env: { PERSONA_HOME: home } } } }),
+  '--permission-prompt-tool',
+  'mcp__approver__approve',
+];
 const OUTPUT = ['--output-format', 'stream-json', '--verbose'];
 const PLUGIN = ['--plugin-dir', repo, '--model', model];
-const ARGV = ['-p', ...PLUGIN, ...ISOLATION, ...TOOLS, ...APPROVE, ...OUTPUT, '--'];
+const argvFor = (home: string) => ['-p', ...PLUGIN, ...ISOLATION, ...TOOLS, ...approve(home), ...OUTPUT, '--'];
 
-const PROMPT = 'Use the panel skill. /aska:panel guardian accelerator: Should the change described in scenario.md ship? Treat this as my complete request; do not ask me questions.';
+const PROMPT = mixedModels
+  ? 'Use the panel skill. /aska:panel --model haiku guardian accelerator@sonnet: Should the change described in scenario.md ship? Treat this as my complete request; do not ask me questions.'
+  : 'Use the panel skill. /aska:panel guardian accelerator: Should the change described in scenario.md ship? Treat this as my complete request; do not ask me questions.';
+const EXPECTED_MODELS: ExpectedModel[] = [
+  { persona: 'guardian', model: 'haiku', modelSource: 'run' },
+  { persona: 'accelerator', model: 'sonnet', modelSource: 'panelist' },
+];
 
 const realHomePersonas = join(homedir(), '.claude', 'personas');
 
 if (dryRun) {
   console.log(PROMPT);
-  console.log(`argv: claude ${ARGV.join(' ')} <prompt>`);
+  console.log(`argv: claude ${argvFor('<fresh temp dir>').join(' ')} <prompt>`);
   console.log('env: PERSONA_HOME=<fresh temp dir>, PERSONA_PLUGINS_JSON=<temp file containing []>');
   process.exit(0);
 }
@@ -69,35 +84,6 @@ function finalResultText(events: unknown[]): string {
     if (ev.type === 'result' && typeof ev.result === 'string') return ev.result;
   }
   return '';
-}
-
-function toolResultTexts(events: unknown[]): string[] {
-  const out: string[] = [];
-  for (const e of events) {
-    const ev = e as { type?: string; message?: { content?: { type?: string; content?: unknown }[] } };
-    if (ev.type !== 'user' && ev.type !== 'assistant') continue;
-    for (const c of ev.message?.content ?? []) {
-      if (c.type !== 'tool_result') continue;
-      if (typeof c.content === 'string') out.push(c.content);
-      else if (Array.isArray(c.content)) out.push(c.content.map((x) => (typeof (x as { text?: unknown })?.text === 'string' ? (x as { text: string }).text : '')).join(''));
-    }
-  }
-  return out;
-}
-
-// The temp folder is created by the panel skill itself at run time (`mktemp -d -t
-// aska-panel-XXXXXX`), so run.ts can't know its path in advance. The report footer names it
-// (skills/panel/SKILL.md step 5's "Footer"); the `mktemp` tool's own result is a fallback for a
-// run whose report is missing or malformed.
-function findTempFolder(report: string, events: unknown[]): string | undefined {
-  const re = /\/\S*aska-panel-[A-Za-z0-9]+/g;
-  const fromReport = report.match(re);
-  if (fromReport) return fromReport[fromReport.length - 1];
-  for (const text of toolResultTexts(events)) {
-    const m = text.match(re);
-    if (m) return m[m.length - 1];
-  }
-  return undefined;
 }
 
 type PanelResultRead = { status: 'ok'; result: PanelResult } | { status: 'missing' | 'malformed' };
@@ -141,9 +127,10 @@ const projectBefore = snapshotTree(projectDir);
 const claudeVersion = spawnSync('claude', ['--version'], { encoding: 'utf8' }).stdout?.trim();
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 
+const ARGV = argvFor(personaHome);
 const r = spawnSync('claude', [...ARGV, PROMPT], {
   cwd: projectDir,
-  env: { ...process.env, PERSONA_HOME: personaHome, PERSONA_PLUGINS_JSON: pluginsJsonFile },
+  env: evalEnv(process.env, personaHome, pluginsJsonFile),
   encoding: 'utf8',
   // The model's own fallback wake-up (ScheduleWakeup) is scheduled up to 1200s out; a shorter
   // spawnSync timeout than that can kill the process before such a wake-up would even fire.
@@ -154,7 +141,7 @@ const r = spawnSync('claude', [...ARGV, PROMPT], {
 const outsideWrites = [
   ...diffSnapshots(repoBefore, snapshotGitTree(repo)).map((p) => `wrote outside the temp project (repo: ${p})`),
   ...diffSnapshots(realHomeBefore, snapshotTree(realHomePersonas)).map((p) => `wrote outside the temp project (~/.claude/personas: ${p})`),
-  ...diffSnapshots(personaHomeBefore, snapshotTree(personaHome)).map((p) => `wrote outside the temp project (PERSONA_HOME: ${p})`),
+  ...ignoreKeptRunChanges(diffSnapshots(personaHomeBefore, snapshotTree(personaHome))).map((p) => `wrote outside the temp project (PERSONA_HOME: ${p})`),
 ];
 const projectChanges = diffSnapshots(projectBefore, snapshotTree(projectDir));
 
@@ -177,7 +164,8 @@ const reg = new Registry([
 const judgmentViolations: Record<string, string[]> = {};
 const verdicts: Record<string, string> = {};
 for (const name of PANELISTS) {
-  const entry = panelists?.find((p) => p.persona === name);
+  const canonical = reg.lookup('persona', name).file?.canonical ?? name;
+  const entry = panelists?.find((p) => p.persona === canonical);
   if (!entry) {
     judgmentViolations[name] = ['panel-result.json has no entry for this panelist'];
     continue;
@@ -205,18 +193,23 @@ const input: PanelRunInput = { events, report, judgmentViolations, verdicts, pan
 const check = checkPanelRun(input);
 check.problems.push(...outsideWrites);
 
+const cost = sourceCost((r.stdout ?? '').split('\n'));
+if (mixedModels) {
+  const expected = EXPECTED_MODELS.map((x) => ({ ...x, persona: reg.lookup('persona', x.persona).file?.canonical ?? x.persona }));
+  check.problems.push(...panelistModelMismatches(panelists, panelistLaunchModels(events), expected), ...costModelMismatches(cost, model));
+}
+
 const pass = check.problems.length === 0;
 console.log(pass ? 'PASS' : `FAIL\n${check.problems.map((p) => `  ${p}`).join('\n')}`);
 for (const s of check.soft) console.log(`  (soft) ${s}`);
 console.log(`max parallel aska:panelist launches: ${parallelPanelistLaunch(events)}`);
-const cost = sourceCost((r.stdout ?? '').split('\n'));
 console.log(costLine(cost));
 
 const out = join(transcripts, `panel-${stamp}.json`);
 writeFileSync(
   out,
   JSON.stringify(
-    { model, claudeVersion, argv: ARGV, exit: r.status, pass, problems: check.problems, soft: check.soft, cost, tempFolder, projectDir, personaHome, pluginsJsonFile, transcript },
+    { model, mixedModels, claudeVersion, argv: ARGV, exit: r.status, pass, problems: check.problems, soft: check.soft, cost, tempFolder, projectDir, personaHome, pluginsJsonFile, transcript },
     null,
     2,
   ),
