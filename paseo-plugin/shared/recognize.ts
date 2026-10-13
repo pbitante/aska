@@ -68,14 +68,18 @@ export function reportDir(command: string): string | null {
   return isRunDir(dir) ? dir : null;
 }
 
+// A persona's key without its plugin prefix: `aska:tester` → `tester`.
+export const shortKey = (persona: string): string => persona.slice(persona.indexOf(":") + 1);
+
 // `<run dir>/judgments/<name>.json` anywhere in a path or command: the chair saving (or checking)
-// a panelist's judgment.
-const JUDGMENT_PATH = /(\/[^\s'"`]*?)\/judgments\/([A-Za-z0-9._-]+)\.json(?=$|[\s'"`;|&)>])/;
+// a panelist's judgment. The skill names the file by the row's canonical (`aska:tester.json`);
+// older chairs used the short name. Either way the name is the short key.
+const JUDGMENT_PATH = /(\/[^\s'"`]*?)\/judgments\/([A-Za-z0-9._:-]+)\.json(?=$|[\s'"`;|&)>])/;
 function judgmentPath(text: string): { dir: string; name: string } | null {
   const m = JUDGMENT_PATH.exec(text);
   if (!m) return null;
   const dir = m[1]!;
-  return isRunDir(dir) ? { dir, name: m[2]! } : null;
+  return isRunDir(dir) ? { dir, name: shortKey(m[2]!) } : null;
 }
 
 function folderInOutput(output: string): string | null {

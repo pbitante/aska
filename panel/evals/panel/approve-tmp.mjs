@@ -40,7 +40,6 @@ const RUN_ID = /^\d{8}T\d{6}Z-[A-Za-z0-9]{6}$/;
 function underKeptRun(dirReal) {
   const home = process.env.PERSONA_HOME;
   if (!home) return false;
-  if (dirReal.split(sep).includes('..')) return false;
   const runs = realOrSelf(home) + sep + ['.claude', 'aska', 'runs'].join(sep) + sep;
   if (!dirReal.startsWith(runs)) return false;
   return RUN_ID.test(dirReal.slice(runs.length).split(sep)[0] ?? '');
@@ -57,6 +56,10 @@ function decide(args) {
   // before realpath ever gets to follow a symlinked directory component, hiding exactly the
   // escape realOrSelf(dirname(...)) is meant to catch (see the same check in approve-personas.mjs).
   const absRaw = isAbsolute(path) ? path : process.cwd() + sep + path;
+  // realpath fails on a missing folder, and realOrSelf then keeps the raw path, prefix and all:
+  // `<allowed>/nope/../../x` would pass the prefix tests while the Write tool resolves it
+  // outside. The skill never writes through "..", so refuse any path that has one.
+  if (absRaw.split(sep).includes('..')) return deny();
   const dirReal = realOrSelf(dirname(absRaw));
   if (!underAskaPanelTmp(dirReal) && !underKeptRun(dirReal)) return deny();
   try {

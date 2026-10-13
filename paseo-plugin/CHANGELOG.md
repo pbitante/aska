@@ -10,6 +10,9 @@ with `node scripts/release-notes.mjs aska-editor <version>` from the repo root.
   characters, and the Tracks marker no longer overlaps row labels.
 - **Zoom** (#7): ctrl/⌘ + wheel zooms at a gentler rate and honours the wheel's `deltaMode`, so
   trackpads and line-scrolling mice behave alike.
+- **Saved judgments under a canonical name:** a judgment saved as `judgments/aska:tester.json`,
+  as the panel skill now names it and most chairs already did, is recognised live and in replay.
+  Before, only `judgments/tester.json` was, so the Flow skipped its collecting phase.
 
 ## 0.2.0 (2026-10-12)
 
