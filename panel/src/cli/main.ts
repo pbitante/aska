@@ -17,6 +17,7 @@ import { discoverScopes } from '../scopes/discover';
 import { Registry } from '../scopes/registry';
 import { diagnosticJson } from '../author/files';
 import { authorCmd } from './author';
+import { lineupCmd } from './lineup';
 import { runsCmd } from './runs';
 import { recordComparison, type RunEnv } from '../runs/store';
 import { gateCmd, targetsCmd } from './gate';
@@ -50,6 +51,7 @@ const USAGE = [
   '  check-judgment <name> [--file <path>] [--checks <targets.json>]   validate a judgment (JSON from the file or stdin)',
   '  check-evidence [--file <path>]         validate an investigator\'s evidence (markdown from the file or stdin)',
   '  compare [--file <path>] [--json] [--record]   compare a panel\'s judgments (panel-result JSON); --record updates the run\'s meta.json',
+  '  lineup --json [--model <m>] <panel> [<member>@<m> …] | <persona>[@<m>] …   who sits on a panel and the model each runs on',
   '  runs new                               create a kept panel-run folder and print its path',
   '  runs list [--json]                     list kept panel runs, newest first',
   '  targets --from <file.md> [--out <targets.json>]   extract a step file\'s adversarial review targets',
@@ -91,6 +93,7 @@ function describeEffective(p: EffectivePersona): string {
     `deprioritized: ${list(p.units.deprioritized, false)}`,
     `capabilities:  ${caps}`,
     `panel tools:   ${panelTools(p).join(', ')}`,
+    ...(p.model ? [`model:         ${p.model} (default for panels)`] : []),
     'inputs:',
     ...p.inputs.map((f) => `  ${f}`),
   ].join('\n');
@@ -250,7 +253,8 @@ export type ParsedArgv =
   | { kind: 'command'; cwd: string; command: 'validate' | 'explain' | 'render' | 'list' | 'prompt' | 'check-judgment' | 'compare' | 'targets' | 'gate'; name?: string; scope?: TargetScope; json?: boolean; panel?: boolean; file?: string; record?: boolean; checks?: string; from?: string; fromGiven?: string; out?: string }
   | { kind: 'author'; cwd: string; command: AuthorCommand; fileKind: FileKind; name: string; scope?: ScopeArg; json: boolean; file?: string; expectHash?: string; force: boolean }
   | { kind: 'runs'; cwd: string; command: 'new' | 'list'; json: boolean }
-  | { kind: 'evidence'; file?: string };
+  | { kind: 'evidence'; file?: string }
+  | { kind: 'lineup'; cwd: string; names: string[]; model?: string };
 
 // Pulled out so bin.ts can tell, before running `claude plugin list`, whether this invocation
 // even reaches a command that needs plugin data — --help and usage errors never do.
@@ -261,7 +265,7 @@ const ONLY = {
   expectHash: '--expect-hash is only accepted by save, patch and delete',
   force: '--force is only accepted by delete',
   panel: '--panel is only accepted by prompt',
-  json: '--json is only accepted by list, runs list, compare, gate, show, save, patch and delete',
+  json: '--json is only accepted by list, lineup, runs list, compare, gate, show, save, patch and delete',
 } as const;
 
 export function parseArgv(argv: string[], baseCwd: string): ParsedArgv {
@@ -278,6 +282,7 @@ export function parseArgv(argv: string[], baseCwd: string): ParsedArgv {
   let expectHash: string | undefined;
   let force = false;
   let record = false;
+  let model: string | undefined;
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -316,6 +321,11 @@ export function parseArgv(argv: string[], baseCwd: string): ParsedArgv {
       force = true;
     } else if (a === '--record') {
       record = true;
+    } else if (a === '--model') {
+      const v = argv[++i];
+      if (!v || v.startsWith('-')) return { kind: 'usage', message: '--model needs a model' };
+      if (model !== undefined) return { kind: 'usage', message: '--model may be given only once' };
+      model = v;
     } else if (a === '--checks' || a === '--from' || a === '--out') {
       const v = argv[++i];
       if (!v) return { kind: 'usage', message: `${a} needs a path` };
@@ -331,6 +341,16 @@ export function parseArgv(argv: string[], baseCwd: string): ParsedArgv {
     }
   }
   if (record && positional[0] !== 'compare') return { kind: 'usage', message: '--record is only accepted by compare' };
+  if (model !== undefined && positional[0] !== 'lineup') return { kind: 'usage', message: '--model is only accepted by lineup' };
+  if (positional[0] === 'lineup') {
+    const names = positional.slice(1);
+    if (scopeSeen || panel || file !== undefined || expectHash !== undefined || force || checks !== undefined || from !== undefined || out !== undefined) {
+      return { kind: 'usage', message: 'lineup accepts only --cwd, --json and --model' };
+    }
+    if (!json) return { kind: 'usage', message: 'lineup needs --json' };
+    if (names.length === 0) return { kind: 'usage', message: 'lineup needs a saved panel, or 2 to 6 personas' };
+    return { kind: 'lineup', cwd, names, model };
+  }
   if (positional[0] === 'check-evidence') {
     if (positional.length > 1) return { kind: 'usage', message: 'check-evidence takes no name; pass the evidence with --file or on stdin' };
     if (scopeSeen || json || panel || expectHash !== undefined || force || checks !== undefined || from !== undefined || out !== undefined) return { kind: 'usage', message: 'check-evidence accepts only --file' };
@@ -399,6 +419,12 @@ export function parseArgv(argv: string[], baseCwd: string): ParsedArgv {
   return { kind: 'command', cwd, command: cmd, name, scope: scope as TargetScope | undefined, json, panel, file, record, checks, from, fromGiven, out };
 }
 
+// Whether this invocation reaches a command that reads plugin scopes, so bin.ts knows to run
+// `claude plugin list`. --help, usage errors, targets, runs and check-evidence never do.
+export function needsPluginData(p: ParsedArgv): boolean {
+  return (p.kind === 'command' && p.command !== 'targets') || p.kind === 'author' || p.kind === 'lineup';
+}
+
 export function run(argv: string[], env: CliEnv): number {
   const parsed = parseArgv(argv, env.cwd);
   if (parsed.kind === 'help') {
@@ -421,6 +447,10 @@ export function run(argv: string[], env: CliEnv): number {
     selfPluginRoot: env.selfPluginRoot,
   });
   if (parsed.kind === 'author') return authorCmd(d, parsed, env);
+  if (parsed.kind === 'lineup') {
+    const lineupReg = new Registry(d.scopes);
+    return lineupCmd(lineupReg, [...d.diagnostics, ...lineupReg.diagnostics], parsed, env);
+  }
   const { command, name, scope } = parsed;
 
   const reg = new Registry(d.scopes);

@@ -130,3 +130,108 @@ export function checkPanelRun(input: PanelRunInput): { problems: string[]; soft:
   if (vs.length >= 2 && new Set(vs).size === 1) soft.push(`verdicts did not differ (${vs.join(' / ')})`);
   return { problems, soft };
 }
+
+export interface ExpectedModel { persona: string; model: string | null; modelSource: string }
+
+// persona → the `model` of each aska:panelist launch for it (null when the launch passed none).
+export function panelistLaunchModels(events: unknown[]): Record<string, (string | null)[]> {
+  const out: Record<string, (string | null)[]> = {};
+  for (const e of events) {
+    const content = (e as { message?: { content?: unknown } }).message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const c of content as { type?: string; name?: string; input?: { subagent_type?: unknown; description?: unknown; model?: unknown } }[]) {
+      if (c.type !== 'tool_use' || c.input?.subagent_type !== 'aska:panelist' || typeof c.input.description !== 'string') continue;
+      const m = /^panelist (\S+)(?: re-ask)?$/.exec(c.input.description.trim());
+      if (!m) continue;
+      (out[m[1]!] ??= []).push(typeof c.input.model === 'string' ? c.input.model : null);
+    }
+  }
+  return out;
+}
+
+export function panelistModelMismatches(
+  entries: { persona: string; model?: string | null; modelSource?: string | null }[] | undefined,
+  launches: Record<string, (string | null)[]>,
+  expected: ExpectedModel[],
+): string[] {
+  const problems: string[] = [];
+  const name = (m: string | null | undefined) => m ?? 'the session model';
+  for (const x of expected) {
+    const e = entries?.find((p) => p.persona === x.persona);
+    if (!e) {
+      problems.push(`${x.persona} has no entry in panel-result.json`);
+    } else if ((e.model ?? null) !== x.model || (e.modelSource ?? null) !== x.modelSource) {
+      problems.push(`${x.persona} was recorded on ${name(e.model)} (${e.modelSource ?? 'no source'}), expected ${name(x.model)} (${x.modelSource})`);
+    }
+    const launched = launches[x.persona] ?? [];
+    if (launched.length === 0) {
+      problems.push(`${x.persona} was never launched as aska:panelist`);
+      continue;
+    }
+    const wrong = launched.filter((m) => m !== x.model);
+    if (wrong.length > 0) {
+      problems.push(wrong[0] === null ? `${x.persona} was launched without a model, expected ${name(x.model)}` : `${x.persona} was launched on ${wrong[0]}, expected ${name(x.model)}`);
+    }
+  }
+  return problems;
+}
+
+// The family of a model id or alias (`claude-sonnet-5-5` and `sonnet` are both sonnet).
+function modelFamily(id: string): string | undefined {
+  return ['haiku', 'sonnet', 'opus', 'fable'].find((f) => id.includes(f));
+}
+
+// A mixed-models run puts one panelist on haiku and one on sonnet, so the run's per-model cost
+// rows (evals/cost) must include both. The eval's own session runs on `sessionModel`, so its
+// chair always produces a row for that model; that row proves nothing about a panelist, so only
+// the expected models that differ from the session's are required (today: haiku).
+export function costModelMismatches(cost: { byModel: Record<string, unknown> }, sessionModel: string): string[] {
+  const ids = Object.keys(cost.byModel);
+  const session = modelFamily(sessionModel);
+  return ['haiku', 'sonnet'].filter((f) => f !== session && !ids.some((id) => modelFamily(id) === f)).map((f) => `the cost rows include no ${f} model`);
+}
+
+// The environment the eval hands `claude -p`. ASKA_RUNS_DIR is dropped so `runs new` can't put a
+// kept run in the caller's real store; the approver only recognises runs under PERSONA_HOME.
+export function evalEnv(base: NodeJS.ProcessEnv, personaHome: string, pluginsJsonFile: string): NodeJS.ProcessEnv {
+  const { ASKA_RUNS_DIR: _runsDir, ...rest } = base;
+  return { ...rest, PERSONA_HOME: personaHome, PERSONA_PLUGINS_JSON: pluginsJsonFile };
+}
+
+// The text of every tool result in a stream-json transcript.
+function toolResultTexts(events: unknown[]): string[] {
+  const out: string[] = [];
+  for (const e of events) {
+    const ev = e as { type?: string; message?: { content?: { type?: string; content?: unknown }[] } };
+    if (ev.type !== 'user' && ev.type !== 'assistant') continue;
+    for (const c of ev.message?.content ?? []) {
+      if (c.type !== 'tool_result') continue;
+      if (typeof c.content === 'string') out.push(c.content);
+      else if (Array.isArray(c.content)) out.push(c.content.map((x) => (typeof (x as { text?: unknown })?.text === 'string' ? (x as { text: string }).text : '')).join(''));
+    }
+  }
+  return out;
+}
+
+// The folder the panel skill keeps its brief, judgments and panel-result.json in is created by the
+// skill itself at run time, so run.ts can't know its path in advance. It is either the kept-run
+// folder `…/.claude/aska/runs/<run id>` (`runs new`, aska >= 0.4.0; the id has the shape of RUN_ID
+// in src/runs/store.ts) or, when that fails, a `mktemp -d -t aska-panel-XXXXXX` folder. The report
+// footer names it (skills/panel/SKILL.md step 5's "Footer"); the tool results are a fallback for a
+// run whose report is missing or malformed.
+export function findTempFolder(report: string, events: unknown[]): string | undefined {
+  const re = /\/\S*(?:aska-panel-[A-Za-z0-9]+|\.claude\/aska\/runs\/\d{8}T\d{6}Z-[A-Za-z0-9]{6})/g;
+  const fromReport = report.match(re);
+  if (fromReport) return fromReport[fromReport.length - 1];
+  for (const text of toolResultTexts(events)) {
+    const m = text.match(re);
+    if (m) return m[m.length - 1];
+  }
+  return undefined;
+}
+
+// Drops the diffSnapshots problems inside a kept-run folder (`.claude/aska/runs/<run id>/`): the panel
+// skill legitimately writes there in PERSONA_HOME. Anything else under runs/ is still reported.
+export function ignoreKeptRunChanges(problems: string[]): string[] {
+  return problems.filter((p) => !/^(added|removed|modified) \.claude\/aska\/runs\/\d{8}T\d{6}Z-[A-Za-z0-9]{6}\//.test(p));
+}

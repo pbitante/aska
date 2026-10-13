@@ -1,0 +1,39 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`formatComparison back-compat > prints a run without models exactly as 0.7.2 did 1`] = `
+"Panel: ad-hoc — "Ship?"
+
+Verdicts
+- g — stop
+- x — proceed-with-conditions
+- y — proceed
+- t — timeout (timed out after 10 min)
+
+Where they disagree
+- a [single-voice]
+    g: high (primary) "a-high"
+    x: not raised — not held
+    y: not raised — not held
+- b [split]
+    g: cleared (primary)
+    x: medium (primary) "b-x"
+    y: not applicable (primary) — docs only
+- c [split]
+    g: not raised — not reported (threshold high) (secondary)
+    x: high (primary) "c-x"
+    y: not raised — not held
+
+Where they agree
+- (none)
+- 1 unit(s) nobody raised
+
+Outside their scope
+- g: critical "licence"
+
+Conditions, missing information and sections
+- x (condition): ship behind a flag
+
+Follow-ups
+1. Re-run t (timed out after 10 min)
+2. g wants to investigate: run migration — reversibility (needs Bash)"
+`;

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PANEL_MODELS } from '../../src/model/types';
 import { splitFrontmatter } from '../../src/parse/frontmatter';
 
 // The investigator and gate reviewer keep Bash, so they run on a denylist. A denylist lets through
@@ -71,11 +72,11 @@ describe('plugin packaging', () => {
     expect(operator).toContain('ASKA_RUNS_DIR');
   });
 
-  it('is version 0.7.2 everywhere', () => {
-    expect(JSON.parse(readFileSync(join(repo, '.claude-plugin/plugin.json'), 'utf8')).version).toBe('0.7.2');
-    expect(JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version).toBe('0.7.2');
+  it('is version 0.8.0 everywhere', () => {
+    expect(JSON.parse(readFileSync(join(repo, '.claude-plugin/plugin.json'), 'utf8')).version).toBe('0.8.0');
+    expect(JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version).toBe('0.8.0');
     const lock = JSON.parse(readFileSync(join(repo, 'package-lock.json'), 'utf8'));
-    expect([lock.version, lock.packages[''].version]).toEqual(['0.7.2', '0.7.2']);
+    expect([lock.version, lock.packages[''].version]).toEqual(['0.8.0', '0.8.0']);
   });
 
   it('documents the gate commands and --checks in the operator skill', () => {
@@ -99,6 +100,24 @@ describe('plugin packaging', () => {
     expect(readme).toContain('evals/gate/README.md');
     expect(existsSync(join(repo, 'evals/gate/make-fixture.mjs'))).toBe(true);
   });
+  it('documents model selection in the README and the operator skill', () => {
+    const readme = readFileSync(join(repo, 'README.md'), 'utf8');
+    expect(readme).toContain('/aska:panel --model sonnet code : Is this migration safe to ship?');
+    expect(readme).toContain('/aska:panel code tester@sonnet : Is this migration safe to ship?');
+    expect(readme).toMatch(/per-run model, then the saved panel's `models`, then the persona's `model`, then your session's model/);
+    expect(readme).toContain('`persona lineup --json [--model <m>] <names…>`');
+    expect(readme).not.toContain('aska may add others as the tool does');
+    const operator = readFileSync(join(repo, 'skills/operator/SKILL.md'), 'utf8');
+    expect(operator).toContain('`lineup --json [--model <m>] <names…>`');
+  });
+
+  it('never suggests fable in the docs', () => {
+    for (const f of ['README.md', 'skills/author/SKILL.md', 'skills/operator/SKILL.md', 'skills/author/reference/formats.md']) {
+      const lines = readFileSync(join(repo, f), 'utf8').split('\n').filter((l) => l.includes('fable'));
+      for (const l of lines) expect(l, `${f}: ${l}`).toMatch(/never suggest|haiku, sonnet, opus, fable|`haiku`, `sonnet`, `opus` or `fable`/i);
+    }
+  });
+
 });
 
 describe('author skill', () => {
@@ -169,6 +188,16 @@ describe('author skill', () => {
       expect(text).not.toContain('aska-author');
     }
   });
+  it('documents the persona model field without suggesting fable or proposing one unasked', () => {
+    const formats = readFileSync(join(repo, 'skills/author/reference/formats.md'), 'utf8');
+    expect(formats).toMatch(/^model: sonnet +# optional; default model for panels$/m);
+    expect(formats).toMatch(/inherited through `extends`/);
+    expect(formats).not.toContain('fable');
+    const skill = readFileSync(join(repo, 'skills/author/SKILL.md'), 'utf8');
+    expect(skill).toMatch(/offer `model` only when the user asks about cost or speed/i);
+    expect(skill).not.toContain('fable');
+  });
+
 });
 
 describe('aska:panelist agent', () => {
@@ -264,7 +293,7 @@ describe('panel skill', () => {
     const t = text();
     expect(t).toContain('../operator/scripts/persona.mjs');
     expect(t).toContain('This skill must be used from the aska plugin');
-    for (const cmd of ['list personas --json', 'list panels --json', 'list units --json', 'prompt <name> --panel', 'check-judgment <name> --file', 'check-evidence --file', 'compare --file']) expect(t).toContain(cmd);
+    for (const cmd of ['list personas --json', 'list panels --json', 'list units --json', 'lineup --json', 'prompt <name> --panel', 'check-judgment <name> --file', 'check-evidence --file', 'compare --file']) expect(t).toContain(cmd);
   });
 
   it('writes the commit history of a branch, PR or commit range into the brief', () => {
@@ -289,12 +318,6 @@ describe('panel skill', () => {
 
   it('lists a bumped dependency\'s docs only when the installed version is the head\'s', () => {
     expect(text()).toMatch(/only when the installed version matches the head's lockfile/);
-  });
-
-  it('keeps models when saving a lineup', () => {
-    const t = text();
-    const step = t.slice(t.indexOf('## 7. Save a lineup'));
-    expect(step).toMatch(/`models` for each panelist that ran on another model/);
   });
 
   it('chooses between aska:code and aska:code-lean by whether the branch will be squashed', () => {
@@ -410,17 +433,143 @@ describe('panel skill', () => {
 
   it('gives every aska:panelist call a fixed description naming the canonical persona', () => {
     const t = text();
-    expect(t).toContain('Give each `aska:panelist` call the description `panelist <canonical>`, exactly.');
+    expect(t).toContain('Give each `aska:panelist` call the description `panelist <canonical>`, exactly, using the row\'s `canonical`.');
     expect(t).toContain('The re-ask call\'s description is `panelist <canonical> re-ask`.');
-    expect(t).toContain('a name with a `:` is already canonical; otherwise use the row with that `name` and `shadowedBy: null`');
+    expect(t).toContain("using the row's `canonical`");
     expect(t).toContain('The re-run call\'s description is `panelist <canonical>`.');
   });
 
-  it('runs a panelist on the model its saved panel or the user gives it', () => {
+  it('documents --model and both @ forms', () => {
+    const t = text();
+    expect(t).toContain('/aska:panel [--model <m>] [<panel> [<member>@<m> …] | <persona>[@<m>] <persona>[@<m>] …] : <question>');
+    expect(t).toMatch(/first name is a saved panel and every other name is one of its members with `@<m>`/);
+    expect(t).toMatch(/untagged name after the first[^.]*persona lineup/i);
+    expect(t).toContain('"tester on sonnet"');
+  });
+
+  it('resolves every lineup with the lineup command and launches exactly its rows', () => {
+    const t = text();
+    expect(t).toContain('`lineup --json [--model <m>] <names…>`');
+    expect(t).toMatch(/pass the names exactly as the user typed them/i);
+    expect(t).toContain("launch exactly the rows it prints");
+    expect(t).toMatch(/If `lineup` exits 1, report its diagnostics and stop/);
+    expect(t).not.toContain('Launch a saved panel\'s `personas` exactly as listed');
+  });
+
+  it("passes a row's model only when it isn't null, and says who runs on another model", () => {
     const t = text();
     expect(t).toContain('`list panels --json` rows have fields `canonical, name, scope, plugin, path, description, personas, models, shadowedBy, valid, errorCount`');
-    expect(t).toContain("pass that model as the call's `model` parameter");
+    expect(t).toContain("pass the row's `model` as the call's `model` parameter when it isn't `null`, and no `model` otherwise");
+    expect(t).toContain('`historian on haiku (persona default)`');
     expect(t).toMatch(/re-ask[^.]*same model/i);
+  });
+
+  it('records model and modelSource in panel-result.json', () => {
+    expect(text()).toContain('{ "persona", "status", "model", "modelSource", "judgment"?, "violations"?, "reason"? }');
+  });
+
+  it('keeps a re-run on its recorded model, and rebuilds the names when the user names another', () => {
+    const t = text();
+    expect(t).toMatch(/A re-run keeps the entry's `model` and `modelSource`/);
+    expect(t).toContain('"re-run the tester on opus"');
+    expect(t).toContain("replace that panelist's name, or its existing `<name>@<m>`, with `<name>@<new>`");
+    expect(t).toContain('Never append a second tag for the same panelist.');
+  });
+
+  it('says which names to pass to lineup for each kind of lineup', () => {
+    const t = text();
+    const b = t.slice(t.indexOf('### 1b. Resolve the lineup'), t.indexOf('## 2. Write the brief'));
+    expect(b).toContain('For a valid `default` panel, pass `default`');
+    expect(b).toContain("for an accepted proposal that is a saved panel, pass its canonical name followed by `<member>@<m>` for each tag the user gave a member.");
+    expect(b).toContain("A tag on a persona that isn't on the panel makes the run ad-hoc");
+    expect(b).toMatch(/built from a saved panel[^.]*pass each remaining member's canonical name, plus each added persona's canonical name/);
+    expect(b).toContain("The saved panel's `models` do not carry over (an ad-hoc lineup has no panel layer); only tags the user gave keep a member on a model; never turn a panel's `models` into tags yourself.");
+    expect(b).not.toContain('keeps that model as');
+    expect(b).toMatch(/Never pass a saved panel's name next to untagged persona names/);
+  });
+
+  it('states the full model order, and takes proposal models from lineup', () => {
+    const t = text();
+    expect(t).toContain("A panelist's model comes from, in order: its own `@`, then `--model`, then the saved panel's `models`, then the persona's default, then the session's model.");
+    const a = t.slice(t.indexOf('### 1a.'), t.indexOf('### 1b.'));
+    expect(a).toMatch(/run `lineup --json \[--model <m>\] <proposed names…>` on the proposed names/);
+    expect(a).toMatch(/never from your own reading of the catalog/);
+  });
+
+  it('keeps the user\'s tags on ad-hoc names, one tag per persona', () => {
+    const t = text();
+    const b = t.slice(t.indexOf('### 1b.'), t.indexOf('## 2. Write the brief'));
+    expect(b).toContain("each with any `@` the user gave");
+    expect(b).toContain('Never two tags for one persona.');
+  });
+
+  it('turns model requests in words into <name>@<m> before calling lineup, and has no doubled word', () => {
+    const t = text();
+    const b = t.slice(t.indexOf('### 1b.'), t.indexOf('## 2. Write the brief'));
+    expect(b).toContain('Model requests in words ("tester on sonnet") become `<name>@<m>` before you call `lineup`.');
+    expect(t).not.toMatch(/\bthen then\b/i);
+  });
+
+  it("checks lineup's panel against the one expected", () => {
+    const t = text();
+    const b = t.slice(t.indexOf('### 1b.'), t.indexOf('## 2. Write the brief'));
+    expect(b).toContain("After `lineup` runs, check that its `panel` is what you expected (`null` for an ad-hoc lineup, the panel's canonical name for a saved one).");
+    expect(b).toMatch(/a persona and a saved panel share a name[^.]*stop/i);
+  });
+
+  it('drops a dropped persona\'s tag, appends a tag for an untagged saved-panel member, and re-runs an investigation on recorded models', () => {
+    const t = text();
+    expect(t).toContain('Dropping a persona drops its tag.');
+    expect(t).toContain('append `<member>@<new>`');
+    expect(t).toContain("on each panelist's recorded model");
+  });
+
+  it('never gives an investigator a model', () => {
+    expect(text()).toMatch(/Investigators get no `model`/);
+  });
+
+  it('never suggests a model in a proposal, nor fable anywhere', () => {
+    const t = text();
+    expect(t).toMatch(/never suggest a model that the user, the saved panel or the persona didn't set/i);
+    expect(t.match(/fable/g) ?? []).toHaveLength(1);
+    expect(t).toMatch(/never suggest[^.]*`fable`/i);
+  });
+
+  it('saves panelist and panel models, and asks about a run-wide --model', () => {
+    const t = text();
+    const step = t.slice(t.indexOf('## 7. Save a lineup'));
+    expect(step).toContain('`models` for each panelist whose `modelSource` is `panelist`');
+    expect(step).not.toContain('`panelist` or `panel`');
+    expect(step).toContain('This run used `--model <m>`. Save those panelists on <m>? (yes/no)');
+    expect(step).toMatch(/Without `--model`, don't ask/);
+    expect(step).toMatch(/never `persona`/i);
+  });
+
+  it('asks which was meant when lineup warns that a name is both a panel and a persona', () => {
+    const t = text();
+    const b = t.slice(t.indexOf('### 1b.'), t.indexOf('## 2. Write the brief'));
+    expect(b).toMatch(/`W_LINEUP_AMBIGUOUS`[^.]*ask the user[^.]*saved panel or the persona[^.]*before (you )?launch/i);
+  });
+
+  it('tells how to get the persona reading when the user means the persona', () => {
+    const t = text();
+    const b = t.slice(t.indexOf('### 1b.'), t.indexOf('## 2. Write the brief'));
+    expect(b).toMatch(/mean the persona[^.]*put (it|that name) after another name/i);
+  });
+
+  it("names the members whose saved-panel model won't apply to an ad-hoc run, and says a tag keeps it", () => {
+    const t = text();
+    const b = t.slice(t.indexOf('### 1b.'), t.indexOf('## 2. Write the brief'));
+    expect(b).toMatch(/name each member whose saved-panel model won't apply[^.]*`@` tag keeps it/i);
+  });
+
+  it('does not list haiku, sonnet and opus as the only models', () => {
+    const t = text();
+    expect(t).not.toContain("to `haiku`, `sonnet` or `opus` (`{}`");
+    expect(t).toContain("to a model alias such as `haiku`, `sonnet` or `opus` (`{}`");
+    const readme = readFileSync(join(repo, 'README.md'), 'utf8');
+    expect(readme).not.toContain("on `haiku`, `sonnet` or `opus`\ninstead");
+    expect(readme).toContain('on a model alias such as `haiku`, `sonnet` or `opus`');
   });
 
   it('mentions no agent host', () => {
@@ -438,10 +587,11 @@ describe('panel skill', () => {
     expect(t).toMatch(/for a \*\*conversation\*\* subject, write a neutral summary:[\s\S]*?no recommendation\*\* and no hint of which way you lean/i);
   });
 
-  it('launches a saved panel\'s personas exactly as listed, and canonical only for suggested ad-hoc panels', () => {
+  it('launches exactly the rows lineup prints', () => {
     const t = text();
-    expect(t).toContain("Launch a saved panel's `personas` exactly as listed");
-    expect(t).toContain('for a suggested ad-hoc panel (no saved panel), use the `canonical` name from `list personas --json`');
+    expect(t).toContain("each row's `persona` is the name to record, and its `canonical` is the name for the call's description");
+    expect(t).not.toContain("Launch a saved panel's `personas` exactly as listed");
+    expect(t).not.toContain("Launch a proposed saved panel's personas exactly as `list panels --json` lists them");
   });
 
   it('mentions aska:ship when a single default name matches no saved panel', () => {
@@ -451,8 +601,8 @@ describe('panel skill', () => {
   it('pins the four selection cases in index order', () => {
     const t = text();
     const order = [
-      'Two or more persona names',
-      'One name that is a saved panel',
+      'Two or more persona names (any other form)',
+      'A saved panel, alone or followed only by `<member>@<m>` tags',
       'No names, and a user or project `default` panel exists',
       'No names otherwise, or the user asks in words for a suggestion',
     ].map((s) => t.indexOf(s));
@@ -613,9 +763,9 @@ describe('panel skill', () => {
     expect(t).not.toMatch(/you may also add your own recommendation/i);
   });
 
-  it('says panel is the saved panel name or null for an ad-hoc panel', () => {
+  it('says panel is what lineup printed, null for a persona lineup', () => {
     const t = text();
-    expect(t).toMatch(/`panel` is the saved panel's name, or `null` for an ad-hoc panel/);
+    expect(t).toMatch(/`panel` is the `panel` that `lineup` printed \(`null` for a persona lineup\)/);
   });
 
   it('says to strip exactly one surrounding code fence before saving a reply', () => {
@@ -707,13 +857,40 @@ describe('gate skill', () => {
     expect(t).toContain('mktemp -d -t aska-gate-XXXXXX');
   });
 
-  it('launches one fresh aska:gate-reviewer on opus with nothing from this conversation', () => {
+  it('launches one fresh aska:gate-reviewer on the chosen model with nothing from this conversation', () => {
     const t = text();
-    expect(t).toMatch(/exactly one `aska:gate-reviewer` subagent with model `opus`/i);
-    expect(t).toMatch(/a new `aska:gate-reviewer` subagent with model `opus`/i);
+    expect(t).toMatch(/exactly one `aska:gate-reviewer` subagent with model `<model>`/i);
+    expect(t).toMatch(/a new `aska:gate-reviewer` subagent with model `<model>`/i);
+    expect(t).not.toMatch(/subagent with model `opus`/);
     expect(t).toMatch(/never use a general-purpose agent in its place/i);
     expect(t).toMatch(/never reuse an agent/i);
     expect(t).toMatch(/nothing from this conversation/i);
+  });
+
+  it('picks the model from --model, then the gate persona, then opus, never the session', () => {
+    const t = text();
+    expect(t).toContain('/aska:gate <step-file> [<base>..<head>] [--records <dir>] [--model <m>]');
+    expect(t).toContain("`<model>` is `--model` if given, else the `model` of the gate persona's row in `list personas --json`, else `opus`");
+    expect(t).toContain("a project or user `gate` when one exists (`scope` `project` or `user`, `shadowedBy: null`), otherwise `aska:gate`");
+    const list = PANEL_MODELS.map((m) => `\`${m}\``);
+    const sentence = `If \`--model\` isn't one of ${list.slice(0, -1).join(', ')} or ${list[list.length - 1]}, say so and stop.`;
+    expect(t, 'the accepted-model sentence must name exactly PANEL_MODELS').toContain(sentence);
+    expect(t).toMatch(/Never launch the reviewer without a `model`/);
+    expect(t).toContain('`on sonnet (--model)`');
+  });
+
+  it('names the model in the report header and the record snippet', () => {
+    const t = text();
+    expect(t).toMatch(/\*\*Header:\*\*[^\n]*the model the reviewer ran on/);
+    expect(t).toContain('- **Gate (aska, run <n>, <model>):** <RESULT>');
+  });
+
+  it('says Opus is the default, not the only model', () => {
+    const fm = splitFrontmatter(path, text()).fm!;
+    expect(String(fm.data.description)).toContain('one fresh reviewer (Opus by default)');
+    const readme = readFileSync(join(repo, 'README.md'), 'utf8');
+    expect(readme).toContain('One fresh reviewer (Opus by default)');
+    expect(readme).toContain('`/aska:gate <step-file> [<base>..<head>] [--records <dir>] [--model <m>]`');
   });
 
   it('re-asks once with a fresh agent, and strips exactly one code fence', () => {

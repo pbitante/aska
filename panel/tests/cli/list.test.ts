@@ -214,10 +214,22 @@ describe('listRows: persona units', () => {
 
   it('keeps persona row keys in a fixed order, and leaves text output free of units', () => {
     const rows = listRows(registryFor(tierFiles()).reg);
-    expect(Object.keys(rows.personas[0]!)).toEqual(['canonical', 'name', 'scope', 'plugin', 'path', 'description', 'shadowedBy', 'valid', 'errorCount', 'extends', 'units']);
+    expect(Object.keys(rows.personas[0]!)).toEqual(['canonical', 'name', 'scope', 'plugin', 'path', 'description', 'shadowedBy', 'valid', 'errorCount', 'extends', 'units', 'model']);
     expect(Object.keys(row('base').units!)).toEqual(['primary', 'secondary', 'deprioritized']);
     const text = formatListing(rows, ['personas'], 200);
     for (const s of ['Alpha', 'Beta', 'primary']) expect(text).not.toContain(s);
+  });
+
+  it('lists each persona with its effective model, or null', () => {
+    const { reg } = registryFor({ ...files(), 'user/personas/base.md': personaMd(['name: base', 'description: Base.', 'model: sonnet', 'units:', '  primary: [cost]']) });
+    const rows = listRows(reg).personas;
+    expect(rows.find((r) => r.canonical === 'base')!.model).toBe('sonnet');
+    expect(rows.find((r) => r.canonical === 'kid')!.model).toBe('sonnet');
+  });
+
+  it('gives null for a persona without a model', () => {
+    const { reg } = registryFor(files());
+    expect(listRows(reg).personas.every((r) => r.model === null)).toBe(true);
   });
 });
 

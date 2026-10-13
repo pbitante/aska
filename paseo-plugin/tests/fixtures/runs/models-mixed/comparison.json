@@ -1,0 +1,463 @@
+{
+  "question": "Is tidepool's step 4 offline sync plan ready to execute as written, from the repository as it is today?",
+  "panel": "aska:plan",
+  "verdicts": [
+    {
+      "persona": "aska:planner",
+      "status": "ok",
+      "verdict": "proceed-with-conditions",
+      "reason": null,
+      "tension": null,
+      "model": "opus",
+      "modelSource": "panel"
+    },
+    {
+      "persona": "aska:guardian",
+      "status": "ok",
+      "verdict": "proceed-with-conditions",
+      "reason": null,
+      "tension": null,
+      "model": "haiku",
+      "modelSource": "panelist"
+    },
+    {
+      "persona": "aska:accelerator",
+      "status": "ok",
+      "verdict": "proceed-with-conditions",
+      "reason": null,
+      "tension": null,
+      "model": null,
+      "modelSource": "session"
+    }
+  ],
+  "units": [
+    {
+      "unit": "aska:data-integrity",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:planner",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:guardian",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        },
+        {
+          "persona": "aska:accelerator",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:delivery-speed",
+      "class": "split",
+      "cells": [
+        {
+          "persona": "aska:planner",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold medium)"
+        },
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:accelerator",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "high",
+          "claim": "Following the plan as written from today's repository repeats work that is already done and stalls delivery. Tasks 1 to 9 are already committed on the step4-sync branch. The only implementation work left is Task 10 (verification), and the plan does not say how to resume.",
+          "why": null
+        }
+      ]
+    },
+    {
+      "unit": "aska:edge-cases",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:planner",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:guardian",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        },
+        {
+          "persona": "aska:accelerator",
+          "tier": "deprioritized",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold critical)"
+        }
+      ]
+    },
+    {
+      "unit": "aska:plan-executability",
+      "class": "single-voice",
+      "cells": [
+        {
+          "persona": "aska:planner",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "high",
+          "claim": "Today's repository doesn't match the plan's starting point. The plan's first action (make a worktree and branch from main at 1111aaa) would fail, and Tasks 1-9 have already been carried out. Followed literally, the executor would hit an existing branch and worktree, Create steps that overwrite committed files, and exact-match 'In path, replace:' edits that no longer match.",
+          "why": null
+        },
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:accelerator",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:rollback-safety",
+      "class": "split",
+      "cells": [
+        {
+          "persona": "aska:planner",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        },
+        {
+          "persona": "aska:guardian",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "high",
+          "claim": "The plan is written for a repository that no longer exists. Tasks 1-9 have already been carried out, and its 'Where to work' instruction (create a worktree at .worktrees/step4-sync on a new branch step4-sync from 1111aaa) clashes with the existing branch and worktree. An executor who follows the plan literally will hit 'already exists' errors. If they then 'fix' that by removing the worktree or recreating the branch, 9 unmerged commits of finished work are lost, and that is hard to undo.",
+          "why": null
+        },
+        {
+          "persona": "aska:accelerator",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold high)"
+        }
+      ]
+    },
+    {
+      "unit": "aska:scope-creep",
+      "class": "split",
+      "cells": [
+        {
+          "persona": "aska:planner",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        },
+        {
+          "persona": "aska:guardian",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold medium)"
+        },
+        {
+          "persona": "aska:accelerator",
+          "tier": "primary",
+          "status": "flagged",
+          "severity": "low",
+          "claim": "The sync screen adds three conflict views beyond what the spec asked for, which is mild gold-plating. The work is already built and cheap to keep, so it is not worth undoing.",
+          "why": null
+        }
+      ]
+    },
+    {
+      "unit": "aska:test-evidence",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:planner",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold medium)"
+        },
+        {
+          "persona": "aska:guardian",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:accelerator",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        }
+      ]
+    },
+    {
+      "unit": "aska:user-value",
+      "class": "none",
+      "cells": [
+        {
+          "persona": "aska:planner",
+          "tier": "none",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not held"
+        },
+        {
+          "persona": "aska:guardian",
+          "tier": "secondary",
+          "status": "not-raised",
+          "severity": null,
+          "claim": null,
+          "why": "not reported (threshold high)"
+        },
+        {
+          "persona": "aska:accelerator",
+          "tier": "primary",
+          "status": "cleared",
+          "severity": null,
+          "claim": null,
+          "why": null
+        }
+      ]
+    }
+  ],
+  "outsideScope": [],
+  "merged": {
+    "conditions": [
+      {
+        "persona": "aska:planner",
+        "text": "Don't run the plan from the top. Tasks 1-9 are already committed on branch step4-sync in .worktrees/step4-sync (9 task commits, HEAD a1b2c3d). Before anything else, add a status or resume note to the plan, or tell the executor directly, saying that execution starts at Task 10 in the existing worktree. Do not create a new worktree, do not re-branch from 1111aaa, and do not re-apply any Create/Replace edits."
+      },
+      {
+        "persona": "aska:planner",
+        "text": "Before Task 10, confirm the existing worktree is clean and its commits match the plan's Tasks 1-9: run git status in .worktrees/step4-sync and git log 2222bbb..step4-sync, checking for 9 commits whose messages match the plan's commit lines. If anything differs, stop and report rather than reconcile by hand."
+      },
+      {
+        "persona": "aska:planner",
+        "text": "Treat Task 10's 'Expected:' counts (640 passed, 4 skipped; 88 files; 31 source files; 120 unit tests) as checks on the existing branch. Any mismatch is a stop-and-report, as the plan's preamble says."
+      },
+      {
+        "persona": "aska:guardian",
+        "text": "Do not run Tasks 1-9 again. The branch step4-sync already holds all 9 task commits and is checked out in .worktrees/step4-sync. Resume at Task 10 (the gates) inside that existing worktree."
+      },
+      {
+        "persona": "aska:guardian",
+        "text": "Never remove, prune or force-recreate the .worktrees/step4-sync worktree or the step4-sync branch (no `git worktree remove --force`, `git branch -D/-f`, `worktree add -B`, or reset to 1111aaa) to make the plan's 'Where to work' step fit. The branch is not merged into main, so its commits exist only there."
+      },
+      {
+        "persona": "aska:guardian",
+        "text": "Before Task 10, check that the worktree has no uncommitted or untracked changes. If it does, stop and report rather than discard them."
+      },
+      {
+        "persona": "aska:guardian",
+        "text": "Accept, or update the plan to say, that the branch is based on 2222bbb rather than 1111aaa. The only difference is the plan doc commit, so the 'Expected' counts should still hold. If any count differs, stop and report rather than improvise."
+      },
+      {
+        "persona": "aska:guardian",
+        "text": "Before the merge and production deploy (migration 0004 runs on the real ./data), take a production backup with `tidepool backup <path>`, as the preview step already does for its copy."
+      },
+      {
+        "persona": "aska:accelerator",
+        "text": "Do not run the plan from Task 1. The worktree, the branch and the work it creates already exist. Pick up on the existing step4-sync branch (a1b2c3d) in .worktrees/step4-sync and run only Task 10 (the server gates, then the app gates), then go to the step gate (review, preview, owner's check)."
+      },
+      {
+        "persona": "aska:accelerator",
+        "text": "Do not run 'git worktree add' or the worktree step again. .worktrees/step4-sync and refs/heads/step4-sync both exist, so the plan's 'Where to work' step would fail or would push someone to recreate (and lose) 9 commits."
+      },
+      {
+        "persona": "aska:accelerator",
+        "text": "Treat the plan's base commit (1111aaa) as stale. The branch was made from main at 2222bbb, which only adds the plan and spec docs, so nothing needs rebasing. Do not reset the branch to match the plan."
+      }
+    ],
+    "missing": [],
+    "investigate": [
+      {
+        "persona": "aska:planner",
+        "what": "Check whether .worktrees/step4-sync has uncommitted or untracked changes, and whether its 9 commits contain exactly the files the plan's File Map lists (git status; git diff --stat 2222bbb..step4-sync).",
+        "why": "If the earlier run stopped partway or left local edits, Task 10's expected counts won't hold. The executor needs to know whether it is verifying the plan's output or something that drifted from it.",
+        "tools": [
+          "git status",
+          "git log",
+          "git diff"
+        ]
+      },
+      {
+        "persona": "aska:planner",
+        "what": "Check whether the step 3 code on main still starts against a database that has migration 0004 applied (added change_log table, migration version 4).",
+        "why": "The table is additive, so a code revert after deploy should be safe. But the plan never states a rollback path, and if the migration runner rejects unknown newer versions, reverting production after the merge would need the backup the plan only takes for the preview.",
+        "tools": [
+          "read src/tidepool/db migration runner",
+          "run main's server against a 0004 copy"
+        ]
+      },
+      {
+        "persona": "aska:guardian",
+        "what": "Whether .worktrees/step4-sync has uncommitted or untracked changes beyond commit a1b2c3d (e.g. a partly started Task 10 or regenerated screenshots).",
+        "why": "Any cleanup or re-run of the plan could silently throw away work that exists only in the working tree.",
+        "tools": [
+          "git -C /home/u/project/tidepool/.worktrees/step4-sync status --porcelain"
+        ]
+      },
+      {
+        "persona": "aska:guardian",
+        "what": "Whether git diff 1111aaa 2222bbb touches only the plan document, so a branch based on 2222bbb is equivalent to the plan's stated base.",
+        "why": "The plan's 'Expected' counts and file-for-file claims assume 1111aaa as the base.",
+        "tools": [
+          "git diff --stat 1111aaa 2222bbb"
+        ]
+      },
+      {
+        "persona": "aska:guardian",
+        "what": "Whether the step 3 server code (main) starts cleanly against a database where migration 0004 has been applied (it may reject unknown applied migrations or schema versions).",
+        "why": "This decides whether reverting the code after deploy is a one-step rollback or needs a database restore.",
+        "tools": [
+          "run main's server against a migrated preview copy",
+          "read src/tidepool/db/migrate.py on main"
+        ]
+      },
+      {
+        "persona": "aska:accelerator",
+        "what": "Whether the worktree has uncommitted changes, and whether the Task 10 gates pass on a1b2c3d (lint, format, type check, pytest at 640 passed / 4 skipped with at least 85% coverage, and the app checks at 120 tests).",
+        "why": "Task 10 is the only implementation work left. Its result decides whether the branch is ready for the review and the owner's preview, or whether a task has to be partly redone.",
+        "tools": [
+          "git status",
+          "pytest / lint / type check",
+          "the app's check task"
+        ]
+      },
+      {
+        "persona": "aska:accelerator",
+        "what": "Whether the 30 web screenshots exist under .worktrees/step4-sync/docs/sync/screens/web/.",
+        "why": "The review that follows the plan needs them. I only confirmed the 12 app screenshots.",
+        "tools": [
+          "ls / Glob on the web screenshots directory"
+        ]
+      }
+    ],
+    "sections": []
+  },
+  "followUps": [
+    {
+      "type": "investigate",
+      "persona": "aska:planner",
+      "what": "Check whether .worktrees/step4-sync has uncommitted or untracked changes, and whether its 9 commits contain exactly the files the plan's File Map lists (git status; git diff --stat 2222bbb..step4-sync).",
+      "why": "If the earlier run stopped partway or left local edits, Task 10's expected counts won't hold. The executor needs to know whether it is verifying the plan's output or something that drifted from it.",
+      "tools": [
+        "git status",
+        "git log",
+        "git diff"
+      ]
+    },
+    {
+      "type": "investigate",
+      "persona": "aska:planner",
+      "what": "Check whether the step 3 code on main still starts against a database that has migration 0004 applied (added change_log table, migration version 4).",
+      "why": "The table is additive, so a code revert after deploy should be safe. But the plan never states a rollback path, and if the migration runner rejects unknown newer versions, reverting production after the merge would need the backup the plan only takes for the preview.",
+      "tools": [
+        "read src/tidepool/db migration runner",
+        "run main's server against a 0004 copy"
+      ]
+    },
+    {
+      "type": "investigate",
+      "persona": "aska:guardian",
+      "what": "Whether .worktrees/step4-sync has uncommitted or untracked changes beyond commit a1b2c3d (e.g. a partly started Task 10 or regenerated screenshots).",
+      "why": "Any cleanup or re-run of the plan could silently throw away work that exists only in the working tree.",
+      "tools": [
+        "git -C /home/u/project/tidepool/.worktrees/step4-sync status --porcelain"
+      ]
+    },
+    {
+      "type": "investigate",
+      "persona": "aska:guardian",
+      "what": "Whether git diff 1111aaa 2222bbb touches only the plan document, so a branch based on 2222bbb is equivalent to the plan's stated base.",
+      "why": "The plan's 'Expected' counts and file-for-file claims assume 1111aaa as the base.",
+      "tools": [
+        "git diff --stat 1111aaa 2222bbb"
+      ]
+    },
+    {
+      "type": "investigate",
+      "persona": "aska:guardian",
+      "what": "Whether the step 3 server code (main) starts cleanly against a database where migration 0004 has been applied (it may reject unknown applied migrations or schema versions).",
+      "why": "This decides whether reverting the code after deploy is a one-step rollback or needs a database restore.",
+      "tools": [
+        "run main's server against a migrated preview copy",
+        "read src/tidepool/db/migrate.py on main"
+      ]
+    },
+    {
+      "type": "investigate",
+      "persona": "aska:accelerator",
+      "what": "Whether the worktree has uncommitted changes, and whether the Task 10 gates pass on a1b2c3d (lint, format, type check, pytest at 640 passed / 4 skipped with at least 85% coverage, and the app checks at 120 tests).",
+      "why": "Task 10 is the only implementation work left. Its result decides whether the branch is ready for the review and the owner's preview, or whether a task has to be partly redone.",
+      "tools": [
+        "git status",
+        "pytest / lint / type check",
+        "the app's check task"
+      ]
+    },
+    {
+      "type": "investigate",
+      "persona": "aska:accelerator",
+      "what": "Whether the 30 web screenshots exist under .worktrees/step4-sync/docs/sync/screens/web/.",
+      "why": "The review that follows the plan needs them. I only confirmed the 12 app screenshots.",
+      "tools": [
+        "ls / Glob on the web screenshots directory"
+      ]
+    }
+  ],
+  "ok": true,
+  "mixedModels": true
+}

@@ -1,11 +1,12 @@
 import { err, warn, type Diagnostic } from '../diagnostics';
 import { effectiveThreshold, type Clash, type EffUnit, type StaleOverride } from '../model/effective';
-import { TIERS, type CapabilityKind, type FileRef, type Loc, type OverrideEntry, type PersonaDoc, type Section, type Tier, type UnitDoc, type UnitEntry } from '../model/types';
+import { TIERS, type CapabilityKind, type FileRef, type Loc, type OverrideEntry, type PanelModel, type PersonaDoc, type Section, type Tier, type UnitDoc, type UnitEntry } from '../model/types';
 import { sectionKey } from '../parse/sections';
 
 export interface Acc {
   name: string;
   description?: string;
+  model?: PanelModel;
   units: Record<Tier, EffUnit[]>;
   stance?: Section;
   tieBreaking?: Section;
@@ -261,6 +262,7 @@ export function applyLayer(a: Acc, layer: Layer): LayerResult {
   acc.tools = union(acc.tools, doc.tools);
   acc.name = doc.name;
   if (doc.description !== undefined) acc.description = doc.description;
+  if (doc.model !== undefined) acc.model = doc.model;
 
   const stale: StaleOverride[] = [...layer.overrides]
     .filter(([id]) => !consulted.has(id))

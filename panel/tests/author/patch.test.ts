@@ -127,4 +127,19 @@ describe('applyPatch', () => {
     expect(r.raw).toContain('## Tie-breaking');
     expect(r.raw).not.toContain('## tie-breaking');
   });
+
+  it('sets and unsets a persona model', () => {
+    expect(applyPatch('persona', 'p', P, { set: { model: 'fable' } }).raw).toContain('model: fable');
+    const set = applyPatch('persona', 'p', P, { set: { model: 'sonnet' } });
+    expect(set.usage).toBeUndefined();
+    expect(set.raw).toContain('model: sonnet');
+    const unset = applyPatch('persona', 'p', set.raw!, { unset: ['model'] });
+    expect(unset.raw).not.toContain('model:');
+  });
+
+  it('rejects an unknown model, and model on units and panels', () => {
+    expect(applyPatch('persona', 'p', P, { set: { model: 'Sonnet' } }).usage).toBe('"model" must be one of haiku, sonnet, opus, fable');
+    expect(applyPatch('unit', 'u', undefined, { set: { model: 'sonnet' } }).usage).toMatch(/can't be patched on a unit/);
+    expect(applyPatch('panel', 'q', undefined, { set: { model: 'sonnet' } }).usage).toMatch(/can't be patched on a panel/);
+  });
 });

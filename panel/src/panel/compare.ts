@@ -2,6 +2,7 @@ import { err, type Diagnostic } from '../diagnostics';
 import { validateJudgment } from '../judgment/validate';
 import { effectiveThreshold, type EffectivePersona } from '../model/effective';
 import { cmp, severityRank, TIERS, type Severity, type Tier } from '../model/types';
+import { MODEL_SOURCES, type ModelSource } from './lineup';
 
 type PanelistStatus = 'ok' | 'malformed' | 'timeout' | 'error';
 const STATUSES: readonly PanelistStatus[] = ['ok', 'malformed', 'timeout', 'error'];
@@ -12,6 +13,8 @@ interface PanelistEntry {
   judgment?: unknown;
   violations?: string[];
   reason?: string;
+  model?: string | null;
+  modelSource?: ModelSource | null;
 }
 
 export interface PanelResult {
@@ -22,7 +25,7 @@ export interface PanelResult {
 
 // `tension`: a plain `proceed` beside the panelist's own medium-or-higher finding, or its own
 // finding of any severity in a primary-tier security unit.
-interface VerdictRow { persona: string; status: PanelistStatus; verdict: string | null; reason: string | null; tension: string | null }
+interface VerdictRow { persona: string; status: PanelistStatus; verdict: string | null; reason: string | null; tension: string | null; model: string | null; modelSource: ModelSource | null }
 type CellTier = Tier | 'none';
 type CellStatus = 'flagged' | 'cleared' | 'not-applicable' | 'not-raised';
 interface UnitCell { persona: string; tier: CellTier; status: CellStatus; severity: string | null; claim: string | null; why: string | null }
@@ -46,6 +49,7 @@ export interface Comparison {
   };
   followUps: FollowUp[];
   ok: boolean;
+  mixedModels: boolean;
 }
 
 interface Finding { unit: string; severity: string; claim: string; evidence: string }
@@ -61,7 +65,7 @@ interface Judgment {
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const FIX = 'Pass the panel-result JSON the panel skill writes: { question, panel, panelists: [{ persona, status, judgment (required for "ok", optional otherwise), violations?, reason? }] }';
+const FIX = 'Pass the panel-result JSON the panel skill writes: { question, panel, panelists: [{ persona, status, judgment (required for "ok", optional otherwise), violations?, reason?, model?, modelSource? }] }';
 
 export function parsePanelResult(text: string): { result?: PanelResult; diagnostics: Diagnostic[] } {
   const fail = (message: string) => ({ diagnostics: [err('E_PANEL_RESULT', message, undefined, FIX)] });
@@ -85,12 +89,21 @@ export function parsePanelResult(text: string): { result?: PanelResult; diagnost
     if (typeof p.status !== 'string' || !(STATUSES as readonly string[]).includes(p.status)) return fail(`panelists[${i}] has an unknown status "${String(p.status)}"`);
     const status = p.status as PanelistStatus;
     if (status === 'ok' && p.judgment === undefined) return fail(`panelists[${i}] (${status}) needs a "judgment"`);
+    const model = p.model === undefined ? null : p.model;
+    if (model !== null && (typeof model !== 'string' || model.trim() === '')) return fail(`panelists[${i}] "model" must be a non-empty string or null`);
+    if (typeof model === 'string' && model.trim() !== model) return fail(`panelists[${i}] "model" has surrounding spaces`);
+    const modelSource = p.modelSource === undefined ? null : p.modelSource;
+    if (modelSource !== null && !(MODEL_SOURCES as readonly unknown[]).includes(modelSource)) return fail(`panelists[${i}] has an unknown modelSource "${String(modelSource)}"`);
+    if (modelSource === 'session' && model !== null) return fail(`panelists[${i}] names model "${model}" but says it ran on the session model`);
+    if (modelSource !== null && modelSource !== 'session' && model === null) return fail(`panelists[${i}] says its model came from "${modelSource}" but names no model`);
     panelists.push({
       persona: p.persona,
       status,
       judgment: p.judgment,
       violations: Array.isArray(p.violations) ? p.violations.filter((v): v is string => typeof v === 'string') : undefined,
       reason: typeof p.reason === 'string' ? p.reason : undefined,
+      model: model as string | null,
+      modelSource: modelSource as ModelSource | null,
     });
   }
   return { result: { question: data.question, panel: typeof data.panel === 'string' ? data.panel : null, panelists }, diagnostics: [] };
@@ -113,7 +126,7 @@ function proceedTension(j: Judgment, eff: EffectivePersona): string | null {
 export function comparePanel(result: PanelResult, resolve: (ref: string) => EffectivePersona | undefined): Comparison {
   const verdicts: VerdictRow[] = [];
   const followUps: FollowUp[] = [];
-  const ok: { persona: string; eff: EffectivePersona; j: Judgment }[] = [];
+  const ok: { persona: string; eff: EffectivePersona; j: Judgment; model: string | null }[] = [];
 
   for (const entry of result.panelists) {
     let status = entry.status;
@@ -134,14 +147,14 @@ export function comparePanel(result: PanelResult, resolve: (ref: string) => Effe
           const j = entry.judgment as Judgment;
           verdict = j.verdict;
           tension = proceedTension(j, eff);
-          ok.push({ persona: entry.persona, eff, j });
+          ok.push({ persona: entry.persona, eff, j, model: entry.model ?? null });
         }
       }
     } else if (status === 'malformed' && reason === null) {
       const n = entry.violations?.length ?? 0;
       reason = n > 0 ? `${n} violation${n === 1 ? '' : 's'}: ${entry.violations![0]}` : 'malformed judgment';
     }
-    verdicts.push({ persona: entry.persona, status, verdict, reason, tension });
+    verdicts.push({ persona: entry.persona, status, verdict, reason, tension, model: entry.model ?? null, modelSource: entry.modelSource ?? null });
     if (status !== 'ok') followUps.push({ type: 'rerun', persona: entry.persona, reason: reason ?? status });
   }
 
@@ -185,7 +198,10 @@ export function comparePanel(result: PanelResult, resolve: (ref: string) => Effe
   }
   for (const it of merged.investigate) followUps.push({ type: 'investigate', ...it });
 
-  return { question: result.question, panel: result.panel, verdicts, units, outsideScope, merged, followUps, ok: ok.length >= 2 };
+  return {
+    question: result.question, panel: result.panel, verdicts, units, outsideScope, merged, followUps,
+    ok: ok.length >= 2, mixedModels: new Set(ok.map((o) => o.model)).size > 1,
+  };
 }
 
 function cellText(c: UnitCell): string {
@@ -195,16 +211,26 @@ function cellText(c: UnitCell): string {
   return `${c.persona}: cleared (${c.tier})`;
 }
 
+const modelTag = (v: VerdictRow): string => v.model ?? (v.modelSource === 'session' ? 'session model' : 'not recorded');
+
 export function formatComparison(c: Comparison): string {
-  const lines: string[] = [`Panel: ${c.panel ?? 'ad-hoc'} — "${c.question}"`, '', 'Verdicts'];
-  for (const v of c.verdicts) lines.push(`- ${v.persona} — ${v.status === 'ok' ? `${v.verdict}${v.tension ? ` (${v.tension})` : ''}` : `${v.status}${v.reason ? ` (${v.reason})` : ''}`}`);
-  const section = (title: string, rows: UnitComparison[]) => {
+  // Without any named model, the output is exactly what it was before models were recorded.
+  const tagged = c.verdicts.some((v) => v.model !== null);
+  const tagOf = new Map(c.verdicts.map((v) => [v.persona, ` [${modelTag(v)}]`]));
+  const lines: string[] = [`Panel: ${c.panel ?? 'ad-hoc'} — "${c.question}"`];
+  if (tagged) lines.push(`Models: ${c.verdicts.map((v) => `${v.persona} [${modelTag(v)}]`).join(', ')}`);
+  lines.push('', 'Verdicts');
+  for (const v of c.verdicts) {
+    const body = v.status === 'ok' ? `${v.verdict}${v.tension ? ` (${v.tension})` : ''}` : `${v.status}${v.reason ? ` (${v.reason})` : ''}`;
+    lines.push(`- ${v.persona} — ${body}${tagged ? tagOf.get(v.persona)! : ''}`);
+  }
+  const section = (title: string, rows: UnitComparison[], tagCells: boolean) => {
     lines.push('', title);
     if (rows.length === 0) lines.push('- (none)');
-    for (const r of rows) lines.push(`- ${r.unit} [${r.class}]`, ...r.cells.map((x) => `    ${cellText(x)}`));
+    for (const r of rows) lines.push(`- ${r.unit} [${r.class}]`, ...r.cells.map((x) => `    ${cellText(x)}${tagCells ? (tagOf.get(x.persona) ?? '') : ''}`));
   };
-  section('Where they disagree', c.units.filter((u) => u.class === 'split' || u.class === 'single-voice'));
-  section('Where they agree', c.units.filter((u) => u.class === 'all-flag'));
+  section('Where they disagree', c.units.filter((u) => u.class === 'split' || u.class === 'single-voice'), c.mixedModels);
+  section('Where they agree', c.units.filter((u) => u.class === 'all-flag'), false);
   lines.push(`- ${c.units.filter((u) => u.class === 'none').length} unit(s) nobody raised`);
   lines.push('', 'Outside their scope');
   if (c.outsideScope.length === 0) lines.push('- (none)');

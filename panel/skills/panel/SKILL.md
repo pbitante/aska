@@ -17,14 +17,17 @@ Run the CLI from the user's project directory:
 
 - `list personas --json`, `list panels --json`, `list units --json`: what exists.
 - `prompt <name> --panel`: one persona's panel prompt.
+- `lineup --json [--model <m>] <names…>`: who sits on the panel and the model each runs on. Pass the names exactly as the user typed them; it prints `{ panel, panelists: [{ persona, canonical, model, modelSource }], diagnostics }`.
 - `check-judgment <name> --file <path>`: validate one judgment.
 - `check-evidence --file <path>`: validate one investigator's evidence.
 - `runs new`: create the run folder and print its path.
 - `compare --file <path> --json [--record]`: compare the panel; `--record` also updates the run's `meta.json`.
 
-`list personas --json` rows have fields `canonical, name, scope, plugin, path, description, shadowedBy, valid, errorCount, extends, units`, where `units` is `{ primary, secondary, deprioritized }`, each a list of `{ canonical, description, threshold }`, or `null` when the persona doesn't resolve or is shadowed.
+`list personas --json` rows have fields `canonical, name, scope, plugin, path, description, shadowedBy, valid, errorCount, extends, units, model`, where `units` is `{ primary, secondary, deprioritized }`, each a list of `{ canonical, description, threshold }`, or `null` when the persona doesn't resolve or is shadowed. `model` is the persona's default model for panels, or `null`.
 
-`list panels --json` rows have fields `canonical, name, scope, plugin, path, description, personas, models, shadowedBy, valid, errorCount`, where `models` maps some of `personas`, exactly as listed, to `haiku`, `sonnet` or `opus` (`{}` when the panel sets none). Launch a saved panel's `personas` exactly as listed, since they are the panel's own references, already resolved the same way `checkPanelFile` resolved them; for a suggested ad-hoc panel (no saved panel), use the `canonical` name from `list personas --json`.
+`list panels --json` rows have fields `canonical, name, scope, plugin, path, description, personas, models, shadowedBy, valid, errorCount`, where `models` maps some of `personas`, exactly as listed, to a model alias such as `haiku`, `sonnet` or `opus` (`{}` when the panel sets none).
+
+Never pick panelists or models from these rows yourself: `lineup` does it (step 1b).
 
 `list units --json` rows have fields `canonical, name, scope, plugin, path, description, shadowedBy, valid, errorCount, threshold, appliesWhen`.
 
@@ -32,10 +35,17 @@ ALWAYS pass `--file` to `check-judgment` and to `compare` — never pipe stdin. 
 
 ## 1. Choose the panelists
 
-The user writes `/aska:panel [<panel> | <persona> <persona> …] : <question>`.
+The user writes `/aska:panel [--model <m>] [<panel> [<member>@<m> …] | <persona>[@<m>] <persona>[@<m>] …] : <question>`.
 
-1. **Two or more persona names:** use exactly those.
-2. **One name that is a saved panel** (`list panels --json`): use its personas. Add its notes to the brief. If the single name is `default` or `aska:default` and no such panel exists, say that `aska:default` is now `aska:ship`.
+- `--model <m>` puts every panelist on `<m>` for this run.
+- `<persona>@<m>` puts one panelist on `<m>`.
+- `<panel> <member>@<m> …` is the saved panel with some members on other models: it applies when the first name is a saved panel and every other name is one of its members with `@<m>`. It still runs as that saved panel. An untagged name after the first makes the names a persona lineup, as before.
+- Words work too: "tester on sonnet", "historian on haiku" mean `tester@sonnet`, `historian@haiku`.
+
+A panelist's model comes from, in order: its own `@`, then `--model`, then the saved panel's `models`, then the persona's default, then the session's model. `lineup` applies that order; you never do.
+
+1. **Two or more persona names (any other form):** use exactly those.
+2. **A saved panel, alone or followed only by `<member>@<m>` tags** (`list panels --json`): use its personas. Add its notes to the brief. If the single name is `default` or `aska:default` and no such panel exists, say that `aska:default` is now `aska:ship`.
 3. **No names, and a user or project `default` panel exists:** use it, and say "using your default panel (`<path>`)". The plugin ships no `default` panel. If that `default` panel is invalid, say so (with its path) and propose a lineup instead.
 4. **No names otherwise, or the user asks in words for a suggestion** (for example "suggest a panel for …"): propose a lineup (step 1a) and wait for the user's reply. A request in words overrides even the user's own `default`. There is no `suggest` keyword; a persona or panel named `suggest` is just a name.
 
@@ -55,6 +65,8 @@ Candidates are `list personas --json` rows with `valid: true`, `shadowedBy: null
 
 Show the proposal in exactly this layout. Nothing launches until the user replies.
 
+Keep any `--model` and `@` the user gave. Once the lineup is drafted, run `lineup --json [--model <m>] <proposed names…>` on the proposed names (as step 1b says to build them), never from your own reading of the catalog. Beside a panelist whose row has a model, show it and where it comes from: `aska:tester (sonnet, saved panel) — …`. Never suggest a model that the user, the saved panel or the persona didn't set, and never suggest `fable`. An edit such as "put the tester on haiku" becomes `tester@haiku`. Dropping a persona drops its tag.
+
 ```
 Question: "<the user's question, word for word>"
 Concerns: <unit>, <unit>, …
@@ -70,7 +82,17 @@ Run this panel? Reply yes, edit it ("add …", "drop …"), or name a saved pane
 
 When the proposal is a saved panel, the header line is `Proposed panel: <name> (saved, <scope>)`, and the personas under it are the panel's own. Every reason names units from the catalog. Never preview what any panelist will conclude.
 
-The user can accept, edit ("drop …", "add …", "swap X for Y"), or name a saved panel instead. Re-check an edited lineup: 2–6 panelists, each resolving. An edited saved panel runs ad-hoc (`panel: null`) and keeps that panel's notes in the brief. Launch a proposed saved panel's personas exactly as `list panels --json` lists them, and a new lineup's personas by `canonical`.
+The user can accept, edit ("drop …", "add …", "swap X for Y"), or name a saved panel instead. Re-check an edited lineup: 2–6 panelists, each resolving. An edited saved panel runs ad-hoc (`panel: null`) and keeps that panel's notes in the brief. Resolve the lineup with `lineup` (step 1b).
+
+### 1b. Resolve the lineup
+
+Once the panelists are chosen, run `lineup --json [--model <m>] <names…>`, with `--model` if the user gave one. Which names to pass:
+
+- **Names the user typed:** pass the names exactly as the user typed them, `@` tags included. Model requests in words ("tester on sonnet") become `<name>@<m>` before you call `lineup`.
+- **The `default` panel:** rules 2 and 3 of step 1 come first (a missing `default` gets the `aska:ship` message; an invalid one gets a proposal). For a valid `default` panel, pass `default`.
+- **A proposal:** for an accepted proposal that is a saved panel, pass its canonical name followed by `<member>@<m>` for each tag the user gave a member. A tag on a persona that isn't on the panel makes the run ad-hoc, built as follows. A lineup built from a saved panel but run ad-hoc (a saved panel plus extra personas, or an edited saved panel): pass each remaining member's canonical name, plus each added persona's canonical name, each with any `@` the user gave. Never two tags for one persona. The saved panel's `models` do not carry over (an ad-hoc lineup has no panel layer); only tags the user gave keep a member on a model; never turn a panel's `models` into tags yourself. When you run a saved panel ad-hoc, name each member whose saved-panel model won't apply, and say that an `@` tag keeps it. Never pass a saved panel's name next to untagged persona names: `lineup` reads that as a persona lineup and fails. A new lineup: each persona's canonical name, with any `@` the user gave.
+
+If `lineup` exits 1, report its diagnostics and stop. After `lineup` runs, check that its `panel` is what you expected (`null` for an ad-hoc lineup, the panel's canonical name for a saved one). If it isn't, a persona and a saved panel share a name: report that, and stop. If `lineup` prints a `W_LINEUP_AMBIGUOUS` warning, the first name is both a saved panel and a persona and was read as the panel: ask the user whether they meant the saved panel or the persona before you launch, and pass the names again to match their answer. If they mean the persona, put that name after another name (a lone first name is always tried as the panel), or have them rename one. Otherwise launch exactly the rows it prints, in order, and nothing else: each row's `persona` is the name to record, and its `canonical` is the name for the call's description. Keep the names you passed: a re-run with another model rebuilds them (step 6).
 
 ## 2. Write the brief
 
@@ -119,20 +141,22 @@ For a `change` subject whose head commit exists (a branch, PR, commit or commit 
 
 Say how many panelists will run and roughly what they will read. Don't ask for confirmation. A proposal the user accepted in step 1a already counts as confirmation.
 
-For each panelist, get its prompt with `prompt <name> --panel`. Then launch every panelist at once: **all** the `aska:panelist` subagent calls **must** be in one message, one call per panelist. Never launch one panelist and wait for its reply before launching the next. Give each `aska:panelist` call the description `panelist <canonical>`, exactly. `<canonical>` is the `canonical` of the `list personas --json` row the name resolves to: a name with a `:` is already canonical; otherwise use the row with that `name` and `shadowedBy: null`. This applies to names the user typed and to a saved panel's `personas` alike. Each call's task is the persona prompt, then a line `---`, then the brief.
+For each panelist, get its prompt with `prompt <name> --panel`. Then launch every panelist at once: **all** the `aska:panelist` subagent calls **must** be in one message, one call per panelist. Never launch one panelist and wait for its reply before launching the next. Give each `aska:panelist` call the description `panelist <canonical>`, exactly, using the row's `canonical`. Each call's task is the persona prompt, then a line `---`, then the brief.
 
-A panelist runs on the session's model unless the saved panel's `models` names it, or the user asked for a model for it (for example "historian on haiku"): then pass that model as the call's `model` parameter. Its re-ask and re-runs use the same model. Say which panelists run on another model when you say how many will run.
+For each row, pass the row's `model` as the call's `model` parameter when it isn't `null`, and no `model` otherwise. When you say how many panelists will run, name each one on another model and why, from its `modelSource`: `tester on sonnet (you asked)` for `panelist` or `run`, `guardian on opus (saved panel)` for `panel`, `historian on haiku (persona default)` for `persona`.
 
 ## 4. Collect and validate
 
 For each reply, before saving it strip one surrounding code fence and nothing else, then save it to `<dir>/judgments/<name>.json` and run `check-judgment <name> --file <that file>` — pass the saved file with `--file`, never stdin.
 
 - **Valid:** status `ok`.
-- **Invalid:** re-ask once, with a fresh `aska:panelist` call containing the persona prompt, the brief, the previous reply, the violations, and an instruction to reply with the raw JSON object only — no code fence. If it is still invalid, status `malformed`, keeping the violations. The re-ask call's description is `panelist <canonical> re-ask`.
+- **Invalid:** re-ask once, with a fresh `aska:panelist` call containing the persona prompt, the brief, the previous reply, the violations, and an instruction to reply with the raw JSON object only — no code fence. If it is still invalid, status `malformed`, keeping the violations. The re-ask call's description is `panelist <canonical> re-ask`. The re-ask runs on the same model as the first call.
 - **The subagent timed out or failed:** status `timeout` or `error`, with the exact reason, for example "timed out after 10 min".
 - **A panelist marked `ok` whose persona no longer resolves:** `compare` demotes it to `error` with reason "persona does not resolve — fix the name before re-running". Don't blindly re-run that entry; fix the name yourself if you can tell what it should be, otherwise ask the user.
 
-Write `<dir>/panel-result.json` as `{ "question", "panel", "panelists": [{ "persona", "status", "judgment"?, "violations"?, "reason"? }] }` — `panel` is the saved panel's name, or `null` for an ad-hoc panel — then run `compare --file <dir>/panel-result.json --json --record` — again with `--file`, never stdin. Pass `--record` on every compare of a folder from `runs new`: this one, and the ones after every re-run or investigation in step 6. With a `mktemp` folder, omit `--record`.
+Write `<dir>/panel-result.json` as `{ "question", "panel", "panelists": [{ "persona", "status", "model", "modelSource", "judgment"?, "violations"?, "reason"? }] }`. `panel` is the `panel` that `lineup` printed (`null` for a persona lineup). Each entry's `persona`, `model` and `modelSource` are its row's.
+
+Then run `compare --file <dir>/panel-result.json --json --record` — again with `--file`, never stdin. Pass `--record` on every compare of a folder from `runs new`: this one, and the ones after every re-run or investigation in step 6. With a `mktemp` folder, omit `--record`.
 
 ## 5. Report
 
@@ -140,7 +164,7 @@ Use only the comparison's facts. `compare --json` verdict rows use `null` for an
 
 Sections, in order:
 
-1. **Header:** the panel name (or "ad-hoc"), the question and the panelists.
+1. **Header:** the panel name (or "ad-hoc"), the question and the panelists. When `compare` prints a `Models:` line, list each panelist's model from it.
 2. **Verdicts:** one line per panelist, including any that timed out, errored or were malformed, with the reason. When a verdict row has a `tension` (a `proceed` beside that panelist's own medium or higher finding, or its own finding of any severity in a primary security unit), print it after the verdict.
 3. **Where they disagree:** `split` and `single-voice` units. One line per panelist: severity and tier with a one-line claim, or why it wasn't raised (not held, not reported with its threshold, cleared, not applicable).
 4. **Where they agree:** `all-flag` units, and a count of units nobody raised.
@@ -153,20 +177,22 @@ Sections, in order:
 
 Every line of the report comes from `compare`'s output. **Follow-ups** lists exactly `compare`'s `followUps`, in order, one numbered line each — re-runs with their reason, investigations with their `what`, `why` and `tools` — and nothing else: don't merge, reword into new actions, or add your own. **Without a request for a recommendation, add no recommendation, "my read", or verdict of your own anywhere in the report**; the chair section is the only place Claude's view may appear.
 
+Keep the model tags `compare` prints on verdict and disagreement lines. Don't explain a disagreement by the models outside the chair section.
+
 Offer any panelist's full judgment on request.
 
 ## 6. Follow-ups
 
 When the user picks a follow-up:
 
-- **Re-run:** launch that persona alone, as `aska:panelist`, with the same brief and the same validation and re-ask. The re-run call's description is `panelist <canonical>`. Replace its entry in `panel-result.json` — never append, since the duplicate check is a literal string match and would count `p` and `acme:p` as two different panelists — run `compare` again (with `--record` on a kept run, as in step 4), and show the updated report.
+- **Re-run:** launch that persona alone, as `aska:panelist`, with the same brief and the same validation and re-ask. The re-run call's description is `panelist <canonical>`. A re-run keeps the entry's `model` and `modelSource`. If the user names another model ("re-run the tester on opus"), rebuild the names you passed to `lineup` in step 1b: replace that panelist's name, or its existing `<name>@<m>`, with `<name>@<new>`. If it's an untagged member of a saved panel, and so not among the names, append `<member>@<new>`. Keep `--model` as it was. Never append a second tag for the same panelist. Run `lineup` with the rebuilt names, and use the new row for that panelist. Replace its entry in `panel-result.json` — never append, since the duplicate check is a literal string match and would count `p` and `acme:p` as two different panelists — run `compare` again (with `--record` on a kept run, as in step 4), and show the updated report.
 - **Investigate:** run it on `aska:investigator`; never use `aska:panelist` for an investigation, since it has no tools. The investigator gathers evidence and doesn't judge, so one check serves the whole panel:
-  1. **Group the checks.** Gather the picked items with every other `investigate` follow-up that asks for the same check, however it's worded. Launch one `aska:investigator` call per distinct check, all in one message, each with the description `investigator <n>`, where `<n>` is the number its evidence file will get. Each call's task is the brief, then a line `---`, then each grouped item's what, why and tools. Add nothing else to the task: no instructions of your own, not even to allow a change "somewhere safe", since the investigator's own rule is never to change anything. Never give it a persona prompt or any panelist's judgment: evidence gathered through one persona's eyes finds what that persona already fears. The user's normal permission prompts apply.
+  1. **Group the checks.** Gather the picked items with every other `investigate` follow-up that asks for the same check, however it's worded. Launch one `aska:investigator` call per distinct check, all in one message, each with the description `investigator <n>`, where `<n>` is the number its evidence file will get. Each call's task is the brief, then a line `---`, then each grouped item's what, why and tools. Add nothing else to the task: no instructions of your own, not even to allow a change "somewhere safe", since the investigator's own rule is never to change anything. Never give it a persona prompt or any panelist's judgment: evidence gathered through one persona's eyes finds what that persona already fears. Investigators get no `model`: they run on the session's model, whatever `--model` said. The user's normal permission prompts apply.
   2. **Check the evidence.** For each reply, strip one surrounding code fence and nothing else, save it to `<dir>/evidence/<n>.md` (numbering on from any evidence file already there, rejected ones included), and run `check-evidence --file <that file>`, with `--file`, never stdin.
      - **Valid:** add it to the brief's **Evidence:** list. Keep a reply whose *Not determined* section is all it has; that is evidence too.
      - **Invalid:** re-ask once, with a fresh `aska:investigator` call described as `investigator <n> re-ask`: the same task, then the previous reply, the violations, and an instruction to reply with only the four sections. Save the new reply over the same file and check it again.
      - **Still invalid, or the call timed out or failed:** don't add it to the brief, since every panelist would weigh it as fact. Rename any saved reply to `<dir>/evidence/<n>.rejected.md`, so it's kept to look at but never listed. Tell the user the investigation failed, with the violations or the exact reason (for example "timed out after 10 min"), and that the follow-up stays open to pick again.
-  3. **Re-run every panelist**, whatever its status, with the updated brief, exactly as in steps 3 and 4: the brief stays identical for every panelist, so one panelist never judges on evidence another hasn't seen. Replace every entry in `panel-result.json`, run `compare` again (with `--record` on a kept run, as in step 4), and show the updated report, marking the units whose status changed. If no evidence was added, don't re-run the panel: nothing in the brief changed.
+  3. **Re-run every panelist**, whatever its status, with the updated brief, exactly as in steps 3 and 4, on each panelist's recorded model: the brief stays identical for every panelist, so one panelist never judges on evidence another hasn't seen. Replace every entry in `panel-result.json`, run `compare` again (with `--record` on a kept run, as in step 4), and show the updated report, marking the units whose status changed. If no evidence was added, don't re-run the panel: nothing in the brief changed.
 
 ## 7. Save a lineup
 
@@ -174,7 +200,7 @@ When the user replies `save <name>` after an ad-hoc run:
 
 1. **Ask where:** project scope (`.claude/personas/`, the default) or user scope (`~/.claude/personas/`). Never save into the plugin's own folder. If any panelist is a project-scope persona and the user picks user scope, say the panel won't resolve in other projects and ask before going on.
 2. **Check the name.** It must be kebab-case. If `<name>.panel.md` already exists in that scope, stop and ask for another name; never overwrite. If the name would shadow a panel in another scope (`list panels --json`), say which one and ask before going on. If the name is `default`, say: "this will now run whenever you give no names."
-3. **Write `<name>.panel.md`:** `name`; a `description` that generalizes the question into an "Is this …?" line, shown to the user to edit before writing; `personas` with each panelist's `canonical` from `list personas --json`; `models` for each panelist that ran on another model, keyed by that same `canonical`; and a body with the original saved panel's notes, if any.
+3. **Write `<name>.panel.md`:** `name`; a `description` that generalizes the question into an "Is this …?" line, shown to the user to edit before writing; `personas` with each panelist's `canonical` from `list personas --json`; `models` for each panelist whose `modelSource` is `panelist`, keyed by that same `canonical`, and never `persona` (the persona already says it) or `panel` (an ad-hoc run has no panel layer). When some panelist's `modelSource` is `run`, first ask, alongside the description: "This run used `--model <m>`. Save those panelists on <m>? (yes/no)". On yes, add them to `models`; on no, leave them out. Without `--model`, don't ask. Say which models were saved; and a body with the original saved panel's notes, if any.
 4. **Validate:** run `validate` and report every diagnostic on the new file's path. If any is an error, delete the file and say why.
 
 Never write a panel file without a `save` reply. Saving doesn't change the run folder or the report.

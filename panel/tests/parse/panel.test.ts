@@ -54,4 +54,11 @@ describe('parsePanel', () => {
     expect(codes(parse('p', panelMd('p', ['a', 'b'], { extra: ['models:', '  a: gpt-4'] })))).toEqual(['E_PANEL_MODEL']);
     expect(codes(parse('p', panelMd('p', ['a', 'b'], { extra: ['models: [a]'] })))).toEqual(['E_FIELD_TYPE']);
   });
+
+  it('accepts fable in models and suggests the nearest model for a typo', () => {
+    const ok = parsePanel('/s/p.panel.md', '---\nname: p\ndescription: P.\npersonas: [a, b]\nmodels: { a: fable }\n---\n');
+    expect(ok.panel!.models).toEqual({ a: 'fable' });
+    const typo = parsePanel('/s/p.panel.md', '---\nname: p\ndescription: P.\npersonas: [a, b]\nmodels: { a: sonet }\n---\n');
+    expect(typo.diagnostics.map((d) => [d.code, d.fix])).toEqual([['E_PANEL_MODEL', 'Did you mean "sonnet"?']]);
+  });
 });

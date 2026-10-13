@@ -18,7 +18,7 @@ const fixture = (run: string, file: string) => JSON.parse(readFileSync(join(fixt
 
 describe("run contracts", () => {
   it("parses real compare output and panel results", () => {
-    for (const run of ["malformed-pair", "plan-trio", "code-five"]) {
+    for (const run of ["malformed-pair", "plan-trio", "code-five", "models-mixed"]) {
       expect(comparisonSchema.safeParse(fixture(run, "comparison.json")).success, run).toBe(true);
       expect(panelResultSchema.safeParse(fixture(run, "panel-result.json")).success, run).toBe(true);
     }
@@ -49,8 +49,27 @@ describe("run contracts", () => {
     expect(runMetaSchema.safeParse({ ...meta, schemaVersion: 2 }).success).toBe(false);
   });
 
+  it("keeps the model fields aska 0.8.0 records", () => {
+    const c = comparisonSchema.parse(fixture("models-mixed", "comparison.json")) as Record<string, unknown> & { verdicts: Record<string, unknown>[] };
+    expect(c.mixedModels).toBe(true);
+    expect(c.verdicts[0]!.model).toBe("opus");
+    const r = panelResultSchema.parse(fixture("models-mixed", "panel-result.json")) as { panelists: Record<string, unknown>[] };
+    expect(r.panelists[1]!.modelSource).toBe("panelist");
+  });
+
+  it("parses run metadata whose panelists carry a model", () => {
+    const meta = {
+      schemaVersion: 1, id: "20261009T201512Z-Ab12Cd", source: "aska", tmpDir: null,
+      agentId: null, workspaceId: null, projectPath: "/repo", question: "q", panel: "aska:code",
+      panelists: [{ persona: "aska:guardian", status: "ok", verdict: "proceed", model: "sonnet" }],
+      startedAt: "2026-10-09T20:15:12.000Z", comparedAt: null, archivedAt: "2026-10-09T20:16:00.000Z",
+      digest: "0123456789abcdef", reportCallId: null, skipped: [],
+    };
+    expect(runMetaSchema.safeParse(meta).success).toBe(true);
+  });
+
   it("parses every fixture judgment", () => {
-    for (const run of ["malformed-pair", "plan-trio", "code-five"]) {
+    for (const run of ["malformed-pair", "plan-trio", "code-five", "models-mixed"]) {
       const dir = join(fixturesDir, run, "judgments");
       for (const file of readdirSync(dir)) {
         expect(judgmentSchema.safeParse(fixture(run, join("judgments", file))).success, `${run}/judgments/${file}`).toBe(true);

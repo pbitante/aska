@@ -8,6 +8,12 @@ export type Tier = 'primary' | 'secondary' | 'deprioritized';
 export const TIERS: readonly Tier[] = ['primary', 'secondary', 'deprioritized'];
 export type EntryTier = Tier | 'exclude';
 
+// The models a panelist (or the gate's reviewer) can run on: the aliases the sub-agent call's
+// `model` parameter takes. `fable` is accepted but never suggested.
+export const PANEL_MODELS = ['haiku', 'sonnet', 'opus', 'fable'] as const;
+export type PanelModel = (typeof PANEL_MODELS)[number];
+export const isPanelModel = (v: unknown): v is PanelModel => (PANEL_MODELS as readonly unknown[]).includes(v);
+
 export type ScopeKind = 'project' | 'user' | 'plugin';
 
 export interface Loc {
@@ -73,6 +79,7 @@ export interface PersonaDoc {
   description?: string;
   extends?: string;
   extendsLoc?: Loc;
+  model?: PanelModel;
   units: UnitEntry[];
   primaryOrder?: { refs: string[]; loc: Loc };
   judgmentSections: JudgmentSectionDecl[];

@@ -4,6 +4,8 @@
 // `mktemp -d -t aska-panel-XXXXXX` (a plain OS temp dir, named with the `aska-panel-` prefix, that
 // sits outside the eval's temporary project), and denies every other permission prompt — including
 // writes into the temporary project, which the eval's snapshot diff separately proves untouched.
+// It also approves Write inside a kept-run folder, `$PERSONA_HOME/.claude/aska/runs/<run id>/`
+// (aska >= 0.4.0: the panel skill's `runs new` creates it there), when PERSONA_HOME is set.
 import { lstatSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, sep } from 'node:path';
@@ -29,8 +31,23 @@ function underAskaPanelTmp(dirReal) {
   return top.startsWith('aska-panel-');
 }
 
+// Same shape as RUN_ID in src/runs/store.ts.
+const RUN_ID = /^\d{8}T\d{6}Z-[A-Za-z0-9]{6}$/;
+
+// dirReal is already realpath'd, so a symlinked run folder or sub-folder resolves to where it
+// really points and fails the prefix test. claude passes its environment to MCP servers, so
+// PERSONA_HOME here is the eval's fresh temp dir; unset, no kept-run folder is approved.
+function underKeptRun(dirReal) {
+  const home = process.env.PERSONA_HOME;
+  if (!home) return false;
+  if (dirReal.split(sep).includes('..')) return false;
+  const runs = realOrSelf(home) + sep + ['.claude', 'aska', 'runs'].join(sep) + sep;
+  if (!dirReal.startsWith(runs)) return false;
+  return RUN_ID.test(dirReal.slice(runs.length).split(sep)[0] ?? '');
+}
+
 function deny() {
-  return { behavior: 'deny', message: `eval harness only approves writes under an aska-panel-* folder in ${tmpRoot}` };
+  return { behavior: 'deny', message: `eval harness only approves writes under an aska-panel-* folder in ${tmpRoot} or a run folder in PERSONA_HOME's kept-run store` };
 }
 
 function decide(args) {
@@ -40,7 +57,8 @@ function decide(args) {
   // before realpath ever gets to follow a symlinked directory component, hiding exactly the
   // escape realOrSelf(dirname(...)) is meant to catch (see the same check in approve-personas.mjs).
   const absRaw = isAbsolute(path) ? path : process.cwd() + sep + path;
-  if (!underAskaPanelTmp(realOrSelf(dirname(absRaw)))) return deny();
+  const dirReal = realOrSelf(dirname(absRaw));
+  if (!underAskaPanelTmp(dirReal) && !underKeptRun(dirReal)) return deny();
   try {
     if (lstatSync(absRaw).isSymbolicLink()) return deny();
   } catch {

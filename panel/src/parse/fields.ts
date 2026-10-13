@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import { didYouMean, err, warn, type Diagnostic } from '../diagnostics';
-import { SEVERITIES, type Severity } from '../model/types';
+import { PANEL_MODELS, SEVERITIES, isPanelModel, type PanelModel, type Severity } from '../model/types';
 import type { Frontmatter } from './frontmatter';
 
 export const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -56,6 +56,22 @@ export function severityValue(v: unknown, what: string, file: string, line: numb
 export function stringList(v: unknown): string[] | undefined {
   if (!Array.isArray(v) || !v.every((x) => typeof x === 'string' && x.trim() !== '')) return undefined;
   return (v as string[]).map((x) => x.trim());
+}
+
+export function modelField(fm: Frontmatter, file: string, ds: Diagnostic[]): PanelModel | undefined {
+  const v = fm.data.model;
+  if (v === undefined || v === null) return undefined;
+  const at = { file, line: fm.lineOf(['model']) };
+  const allowed = `one of ${PANEL_MODELS.join(', ')}`;
+  if (typeof v !== 'string') {
+    ds.push(err('E_FIELD_TYPE', `"model" must be ${allowed}`, at, `Set "model" to ${allowed}`));
+    return undefined;
+  }
+  if (!isPanelModel(v)) {
+    ds.push(err('E_PERSONA_MODEL', `unknown model "${v}"`, at, hint(v, PANEL_MODELS) ?? `Use ${allowed}`));
+    return undefined;
+  }
+  return v;
 }
 
 export function warnUnknownFields(fm: Frontmatter, known: readonly string[], file: string, ds: Diagnostic[]): void {

@@ -44,7 +44,7 @@ describe('persona compare', () => {
     const r = cli(panel([{ persona: 'example', status: 'ok', judgment: exampleJ }, { persona: 'base', status: 'ok', judgment: baseJ }]))('compare', '--json');
     const c = JSON.parse(r.text) as { ok: boolean; verdicts: unknown[]; units: unknown[] };
     expect(c.ok).toBe(true);
-    expect(Object.keys(c)).toEqual(['question', 'panel', 'verdicts', 'units', 'outsideScope', 'merged', 'followUps', 'ok']);
+    expect(Object.keys(c)).toEqual(['question', 'panel', 'verdicts', 'units', 'outsideScope', 'merged', 'followUps', 'ok', 'mixedModels']);
   });
 
   it('still prints verdicts and follow-ups, then exits 1, with fewer than 2 ok', () => {

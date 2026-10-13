@@ -7396,17 +7396,17 @@ function formatDiagnostic(d) {
     fix: ${d.fix}` : head;
 }
 function distance(a, b) {
-  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  const row2 = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {
-    let prev = row[0];
-    row[0] = i;
+    let prev = row2[0];
+    row2[0] = i;
     for (let j = 1; j <= b.length; j++) {
-      const tmp = row[j];
-      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      const tmp = row2[j];
+      row2[j] = Math.min(row2[j] + 1, row2[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
       prev = tmp;
     }
   }
-  return row[b.length];
+  return row2[b.length];
 }
 function didYouMean(name, candidates) {
   let best;
@@ -7464,6 +7464,8 @@ var SEVERITIES = ["low", "medium", "high", "critical"];
 var severityRank = (s) => SEVERITIES.indexOf(s);
 var cmp = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 var TIERS = ["primary", "secondary", "deprioritized"];
+var PANEL_MODELS = ["haiku", "sonnet", "opus", "fable"];
+var isPanelModel = (v) => PANEL_MODELS.includes(v);
 
 // src/scopes/discover.ts
 var isDir = (p) => {
@@ -8168,6 +8170,21 @@ function stringList(v) {
   if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && x.trim() !== "")) return void 0;
   return v.map((x) => x.trim());
 }
+function modelField(fm, file, ds) {
+  const v = fm.data.model;
+  if (v === void 0 || v === null) return void 0;
+  const at = { file, line: fm.lineOf(["model"]) };
+  const allowed = `one of ${PANEL_MODELS.join(", ")}`;
+  if (typeof v !== "string") {
+    ds.push(err("E_FIELD_TYPE", `"model" must be ${allowed}`, at, `Set "model" to ${allowed}`));
+    return void 0;
+  }
+  if (!isPanelModel(v)) {
+    ds.push(err("E_PERSONA_MODEL", `unknown model "${v}"`, at, hint(v, PANEL_MODELS) ?? `Use ${allowed}`));
+    return void 0;
+  }
+  return v;
+}
 function warnUnknownFields(fm, known, file, ds) {
   for (const k of Object.keys(fm.data)) {
     if (!known.includes(k)) ds.push(warn("W_UNKNOWN_FIELD", `unknown field "${k}" is ignored`, { file, line: fm.lineOf([k]) }, hint(k, known) ?? `Remove "${k}", or check for a typo`));
@@ -8181,23 +8198,23 @@ function normalizeSource(src) {
 }
 function splitFrontmatter(file, raw) {
   const lines = normalizeSource(raw).split("\n");
-  const fail = (message, line, fix) => ({
+  const fail2 = (message, line, fix) => ({
     diagnostics: [err("E_FRONTMATTER", message, { file, line }, fix)]
   });
   if (lines[0]?.trim() !== "---") {
-    return fail("file must start with a --- frontmatter block", 1, "Add a frontmatter block delimited by --- lines at the top of the file");
+    return fail2("file must start with a --- frontmatter block", 1, "Add a frontmatter block delimited by --- lines at the top of the file");
   }
   const close = lines.findIndex((l, i) => i > 0 && l.trim() === "---");
-  if (close < 0) return fail("frontmatter block is not closed", 1, "Add a closing --- line after the frontmatter");
+  if (close < 0) return fail2("frontmatter block is not closed", 1, "Add a closing --- line after the frontmatter");
   const lineCounter = new import_yaml.LineCounter();
   const doc = (0, import_yaml.parseDocument)(lines.slice(1, close).join("\n"), { lineCounter });
   if (doc.errors.length > 0) {
     const e = doc.errors[0];
     const line = (e.linePos?.[0]?.line ?? 1) + 1;
-    return fail(`invalid YAML: ${e.message.split("\n")[0]}`, line, "Fix the YAML syntax in the frontmatter");
+    return fail2(`invalid YAML: ${e.message.split("\n")[0]}`, line, "Fix the YAML syntax in the frontmatter");
   }
   if (!(0, import_yaml.isMap)(doc.contents)) {
-    return fail("frontmatter must be a YAML mapping of fields", 2, "Write the frontmatter as key: value lines");
+    return fail2("frontmatter must be a YAML mapping of fields", 2, "Write the frontmatter as key: value lines");
   }
   const lineOf = (path) => {
     for (let p = [...path]; p.length > 0; p = p.slice(0, -1)) {
@@ -8220,7 +8237,7 @@ function splitFrontmatter(file, raw) {
     data = doc.toJS();
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return fail(`invalid YAML: ${message}`, 2, "Fix the YAML syntax in the frontmatter");
+    return fail2(`invalid YAML: ${message}`, 2, "Fix the YAML syntax in the frontmatter");
   }
   return {
     fm: {
@@ -8321,7 +8338,7 @@ function parseList(text, startLine) {
 }
 
 // src/parse/persona.ts
-var PERSONA_FIELDS = ["name", "description", "extends", "units", "judgment", "capabilities", "overrides"];
+var PERSONA_FIELDS = ["name", "description", "extends", "model", "units", "judgment", "capabilities", "overrides"];
 var UNIT_KEYS = ["primary", "secondary", "deprioritized", "exclude", "primary_order"];
 var ALL_SETTINGS = ["threshold", "add_questions", "add_red_flags", "note"];
 var TIER_SETTINGS = {
@@ -8400,6 +8417,7 @@ function parsePersona(file, raw) {
   if (ext !== void 0 && !REF.test(ext)) {
     ds.push(err("E_FIELD_TYPE", `extends "${ext}" is not a valid persona reference`, loc(["extends"]), "Use a kebab-case name, or plugin:name"));
   }
+  const model = modelField(fm, file, ds);
   const units = [];
   let primaryOrder;
   let primaryTypeError = false;
@@ -8625,6 +8643,7 @@ function parsePersona(file, raw) {
       description,
       extends: ext,
       extendsLoc: ext !== void 0 ? loc(["extends"]) : void 0,
+      model,
       units,
       primaryOrder,
       judgmentSections,
@@ -8953,6 +8972,7 @@ function applyLayer(a, layer) {
   acc.tools = union(acc.tools, doc.tools);
   acc.name = doc.name;
   if (doc.description !== void 0) acc.description = doc.description;
+  if (doc.model !== void 0) acc.model = doc.model;
   const stale = [...layer.overrides].filter(([id]) => !consulted.has(id)).map(([id, o]) => ({ layer: layer.file, key: o.key, id, loc: o.loc, hint: o.hint }));
   return { acc, clashes, stale, diagnostics };
 }
@@ -9137,6 +9157,7 @@ function resolvePersona(reg, ref) {
       name: acc.name,
       canonical: top.file.canonical,
       description: acc.description,
+      model: acc.model ?? null,
       source: top.file.path,
       sourceId: inputId(top.file),
       units: acc.units,
@@ -9249,7 +9270,6 @@ import { readFileSync as readFileSync5 } from "node:fs";
 import { readFileSync as readFileSync4 } from "node:fs";
 
 // src/parse/panel.ts
-var PANEL_MODELS = ["haiku", "sonnet", "opus"];
 function parsePanel(file, raw) {
   const split = splitFrontmatter(file, raw);
   if (!split.fm) return { diagnostics: split.diagnostics };
@@ -9290,8 +9310,9 @@ function parsePanel(file, raw) {
         const loc = { file, line: fm.lineOf(["models", ref]) };
         if (!personas.some((p) => p.ref === ref)) {
           ds.push(err("E_PANEL_MODEL", `models names "${ref}", which is not in personas`, loc, "Use a persona exactly as personas lists it"));
-        } else if (!PANEL_MODELS.includes(model)) {
-          ds.push(err("E_PANEL_MODEL", `models gives "${ref}" an unknown model ${JSON.stringify(model)}`, loc, `Use one of ${PANEL_MODELS.join(", ")}`));
+        } else if (!isPanelModel(model)) {
+          const fix = typeof model === "string" && hint(model, PANEL_MODELS) || `Use one of ${PANEL_MODELS.join(", ")}`;
+          ds.push(err("E_PANEL_MODEL", `models gives "${ref}" an unknown model ${JSON.stringify(model)}`, loc, fix));
         } else {
           models[ref] = model;
         }
@@ -9498,9 +9519,7 @@ function base(reg, f, info) {
     errorCount: info.errorCount
   };
 }
-function unitsOf(reg, canonical) {
-  const eff = resolvePersona(reg, canonical).effective;
-  if (!eff) return null;
+function unitsOf(eff) {
   const brief = (tier) => eff.units[tier].map((u) => ({ canonical: u.canonical, description: u.unit.description, threshold: effectiveThreshold(u) }));
   return { primary: brief("primary"), secondary: brief("secondary"), deprioritized: brief("deprioritized") };
 }
@@ -9512,7 +9531,8 @@ function listRows(reg) {
   const personaRows = [...reg.all("persona")].sort(order).map((f) => {
     const info = inspect(f);
     const b = base(reg, f, info);
-    return { ...b, extends: str(info.data, "extends"), units: b.shadowedBy ? null : unitsOf(reg, f.canonical) };
+    const eff = b.shadowedBy ? void 0 : resolvePersona(reg, f.canonical).effective;
+    return { ...b, extends: str(info.data, "extends"), units: eff ? unitsOf(eff) : null, model: eff?.model ?? null };
   });
   const panels = [...reg.all("panel")].sort(order).map((f) => {
     const info = inspect(f);
@@ -9597,38 +9617,135 @@ function checkLibrary(reg, userOnly) {
   return { units, personas, panels };
 }
 
+// src/panel/lineup.ts
+var MODEL_SOURCES = ["panelist", "run", "panel", "persona", "session"];
+var fail = (diagnostics) => ({ panel: null, panelists: [], diagnostics });
+var lineupErr = (message, fix) => err("E_LINEUP", message, void 0, fix);
+var badModel = (m, where) => lineupErr(`unknown model "${m}" ${where}`, hint(m, PANEL_MODELS) ?? `Use one of ${PANEL_MODELS.join(", ")}`);
+function readName(token, ds) {
+  const at = token.indexOf("@");
+  const name = at < 0 ? { token, ref: token } : { token, ref: token.slice(0, at), model: token.slice(at + 1) };
+  if (!REF.test(name.ref)) ds.push(lineupErr(`"${token}" is not a valid persona or panel name`, "Use a kebab-case name, or plugin:name, optionally followed by @<model>"));
+  else if (name.model !== void 0 && !isPanelModel(name.model)) ds.push(badModel(name.model, `for ${name.ref}`));
+  return name;
+}
+function row(reg, launch, file, layers, ds) {
+  const eff = resolvePersona(reg, file.canonical).effective;
+  if (!eff) ds.push(lineupErr(`${launch} does not resolve`, `Run: persona validate ${file.canonical}`));
+  const persona = eff?.model ?? void 0;
+  const [model, modelSource] = layers.panelist ? [layers.panelist, "panelist"] : layers.run ? [layers.run, "run"] : layers.panel ? [layers.panel, "panel"] : persona ? [persona, "persona"] : [null, "session"];
+  return { persona: launch, canonical: file.canonical, model, modelSource };
+}
+function fromPanel(reg, file, tagged, run2) {
+  const checked = checkPanelFile(reg, file);
+  if (!checked.panel || hasErrors(checked.diagnostics)) return fail(checked.diagnostics);
+  const ds = [...checked.diagnostics];
+  const members = checked.panel.personas.map((p, i) => ({ ref: p.ref, file: checked.personas[i] }));
+  const own = /* @__PURE__ */ new Map();
+  for (const t of tagged) {
+    const target = reg.lookup("persona", t.ref).file;
+    const m = members.find((x) => x.ref === t.ref || target !== void 0 && x.file.path === target.path);
+    if (!m) {
+      ds.push(lineupErr(`${t.ref} is not on panel ${file.canonical}`, `Tag only the panel's own members (${members.map((x) => x.ref).join(", ")}), or list the personas instead to change the lineup`));
+    } else if (own.has(m.file.path)) {
+      ds.push(lineupErr(`${m.ref} is tagged twice`, "Give each member one model"));
+    } else {
+      own.set(m.file.path, t.model);
+    }
+  }
+  if (hasErrors(ds)) return fail(ds);
+  const panelModels = checked.panel.models;
+  const panelists = members.map((m) => row(reg, m.ref, m.file, { panelist: own.get(m.file.path), run: run2, panel: Object.hasOwn(panelModels, m.ref) ? panelModels[m.ref] : void 0 }, ds));
+  return hasErrors(ds) ? fail(ds) : { panel: file.canonical, panelists, diagnostics: ds };
+}
+function fromPersonas(reg, names, run2) {
+  const ds = [];
+  if (names.length < 2 || names.length > 6) {
+    ds.push(err("E_PANEL_SIZE", `a panel needs 2 to 6 personas, this lineup has ${names.length}`, void 0, "Name between 2 and 6 personas, or one saved panel"));
+  }
+  const seated = [];
+  for (const n of names) {
+    const l = reg.lookup("persona", n.ref);
+    if (!l.file) {
+      const isPanel = reg.lookup("panel", n.ref).file !== void 0;
+      const fix = isPanel ? `${n.ref} is a saved panel: tag every other name with @<m>, or list personas only` : l.diagnostic?.fix ?? "Use the name of an existing persona";
+      ds.push(err("E_PANEL_PERSONA", `persona "${n.ref}" does not resolve`, void 0, fix));
+      continue;
+    }
+    const dup = seated.find((s) => s.file.path === l.file.path);
+    if (dup) {
+      ds.push(err("E_PANEL_PERSONA", `"${n.ref}" and "${dup.name.ref}" are the same persona (${l.file.canonical})`, void 0, "List each persona once"));
+      continue;
+    }
+    seated.push({ name: n, file: l.file });
+  }
+  if (hasErrors(ds)) return fail(ds);
+  const panelists = seated.map((s) => row(reg, s.file.canonical, s.file, { panelist: s.name.model, run: run2 }, ds));
+  return hasErrors(ds) ? fail(ds) : { panel: null, panelists, diagnostics: ds };
+}
+function resolveLineup(reg, input) {
+  const ds = [];
+  if (input.model !== void 0 && !isPanelModel(input.model)) ds.push(badModel(input.model, "in --model"));
+  const names = input.names.map((t) => readName(t, ds));
+  if (names.length === 0) ds.push(lineupErr("no lineup given", "Name a saved panel, or 2 to 6 personas"));
+  if (hasErrors(ds)) return fail(ds);
+  const run2 = input.model;
+  const [first, ...rest] = names;
+  const panelFile = reg.lookup("panel", first.ref).file;
+  if (first.model === void 0 && panelFile && rest.every((n) => n.model !== void 0)) {
+    const l = fromPanel(reg, panelFile, rest, run2);
+    if (l.panel !== null && reg.lookup("persona", first.ref).file) {
+      l.diagnostics.push(warn("W_LINEUP_AMBIGUOUS", `${first.ref} is both a saved panel and a persona; read as the panel`, void 0, `To mean the persona, put ${first.ref} after another name (tester@sonnet ${first.ref}); to mean the panel, keep it first. Or rename one`));
+    }
+    return l;
+  }
+  if (first.model !== void 0 && panelFile && !reg.lookup("persona", first.ref).file) {
+    return fail([lineupErr(`${first.ref} is a saved panel, not a persona`, "Put a whole panel on one model with --model <m>")]);
+  }
+  return fromPersonas(reg, names, run2);
+}
+
 // src/panel/compare.ts
 var STATUSES = ["ok", "malformed", "timeout", "error"];
 var isObj2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
-var FIX = 'Pass the panel-result JSON the panel skill writes: { question, panel, panelists: [{ persona, status, judgment (required for "ok", optional otherwise), violations?, reason? }] }';
+var FIX = 'Pass the panel-result JSON the panel skill writes: { question, panel, panelists: [{ persona, status, judgment (required for "ok", optional otherwise), violations?, reason?, model?, modelSource? }] }';
 function parsePanelResult(text) {
-  const fail = (message) => ({ diagnostics: [err("E_PANEL_RESULT", message, void 0, FIX)] });
-  if (text.trim() === "") return fail("no panel result given");
+  const fail2 = (message) => ({ diagnostics: [err("E_PANEL_RESULT", message, void 0, FIX)] });
+  if (text.trim() === "") return fail2("no panel result given");
   let data;
   try {
     data = JSON.parse(text);
   } catch {
-    return fail("panel result is not valid JSON");
+    return fail2("panel result is not valid JSON");
   }
-  if (!isObj2(data)) return fail("panel result must be a JSON object");
-  if (typeof data.question !== "string" || data.question.trim() === "") return fail('panel result needs a non-empty "question"');
-  if (data.panel !== void 0 && data.panel !== null && typeof data.panel !== "string") return fail('"panel" must be a string or null');
-  if (!Array.isArray(data.panelists)) return fail('"panelists" must be a list');
+  if (!isObj2(data)) return fail2("panel result must be a JSON object");
+  if (typeof data.question !== "string" || data.question.trim() === "") return fail2('panel result needs a non-empty "question"');
+  if (data.panel !== void 0 && data.panel !== null && typeof data.panel !== "string") return fail2('"panel" must be a string or null');
+  if (!Array.isArray(data.panelists)) return fail2('"panelists" must be a list');
   const panelists = [];
   const seen = /* @__PURE__ */ new Set();
   for (const [i, p] of data.panelists.entries()) {
-    if (!isObj2(p) || typeof p.persona !== "string" || p.persona.trim() === "") return fail(`panelists[${i}] needs a "persona"`);
-    if (seen.has(p.persona)) return fail(`panelists[${i}] repeats persona ${p.persona}; replace the earlier entry instead`);
+    if (!isObj2(p) || typeof p.persona !== "string" || p.persona.trim() === "") return fail2(`panelists[${i}] needs a "persona"`);
+    if (seen.has(p.persona)) return fail2(`panelists[${i}] repeats persona ${p.persona}; replace the earlier entry instead`);
     seen.add(p.persona);
-    if (typeof p.status !== "string" || !STATUSES.includes(p.status)) return fail(`panelists[${i}] has an unknown status "${String(p.status)}"`);
+    if (typeof p.status !== "string" || !STATUSES.includes(p.status)) return fail2(`panelists[${i}] has an unknown status "${String(p.status)}"`);
     const status = p.status;
-    if (status === "ok" && p.judgment === void 0) return fail(`panelists[${i}] (${status}) needs a "judgment"`);
+    if (status === "ok" && p.judgment === void 0) return fail2(`panelists[${i}] (${status}) needs a "judgment"`);
+    const model = p.model === void 0 ? null : p.model;
+    if (model !== null && (typeof model !== "string" || model.trim() === "")) return fail2(`panelists[${i}] "model" must be a non-empty string or null`);
+    if (typeof model === "string" && model.trim() !== model) return fail2(`panelists[${i}] "model" has surrounding spaces`);
+    const modelSource = p.modelSource === void 0 ? null : p.modelSource;
+    if (modelSource !== null && !MODEL_SOURCES.includes(modelSource)) return fail2(`panelists[${i}] has an unknown modelSource "${String(modelSource)}"`);
+    if (modelSource === "session" && model !== null) return fail2(`panelists[${i}] names model "${model}" but says it ran on the session model`);
+    if (modelSource !== null && modelSource !== "session" && model === null) return fail2(`panelists[${i}] says its model came from "${modelSource}" but names no model`);
     panelists.push({
       persona: p.persona,
       status,
       judgment: p.judgment,
       violations: Array.isArray(p.violations) ? p.violations.filter((v) => typeof v === "string") : void 0,
-      reason: typeof p.reason === "string" ? p.reason : void 0
+      reason: typeof p.reason === "string" ? p.reason : void 0,
+      model,
+      modelSource
     });
   }
   return { result: { question: data.question, panel: typeof data.panel === "string" ? data.panel : null, panelists }, diagnostics: [] };
@@ -9666,14 +9783,14 @@ function comparePanel(result, resolve7) {
           const j = entry.judgment;
           verdict = j.verdict;
           tension = proceedTension(j, eff);
-          ok.push({ persona: entry.persona, eff, j });
+          ok.push({ persona: entry.persona, eff, j, model: entry.model ?? null });
         }
       }
     } else if (status === "malformed" && reason === null) {
       const n = entry.violations?.length ?? 0;
       reason = n > 0 ? `${n} violation${n === 1 ? "" : "s"}: ${entry.violations[0]}` : "malformed judgment";
     }
-    verdicts.push({ persona: entry.persona, status, verdict, reason, tension });
+    verdicts.push({ persona: entry.persona, status, verdict, reason, tension, model: entry.model ?? null, modelSource: entry.modelSource ?? null });
     if (status !== "ok") followUps.push({ type: "rerun", persona: entry.persona, reason: reason ?? status });
   }
   const unitIds = [...new Set(ok.flatMap(({ eff }) => TIERS.flatMap((t) => eff.units[t].map((u) => u.canonical))))].sort(cmp);
@@ -9711,7 +9828,17 @@ function comparePanel(result, resolve7) {
     }
   }
   for (const it of merged.investigate) followUps.push({ type: "investigate", ...it });
-  return { question: result.question, panel: result.panel, verdicts, units, outsideScope, merged, followUps, ok: ok.length >= 2 };
+  return {
+    question: result.question,
+    panel: result.panel,
+    verdicts,
+    units,
+    outsideScope,
+    merged,
+    followUps,
+    ok: ok.length >= 2,
+    mixedModels: new Set(ok.map((o) => o.model)).size > 1
+  };
 }
 function cellText(c) {
   if (c.status === "flagged") return `${c.persona}: ${c.severity} (${c.tier}) "${c.claim}"`;
@@ -9719,16 +9846,24 @@ function cellText(c) {
   if (c.status === "not-applicable") return `${c.persona}: not applicable (${c.tier}) \u2014 ${c.why}`;
   return `${c.persona}: cleared (${c.tier})`;
 }
+var modelTag = (v) => v.model ?? (v.modelSource === "session" ? "session model" : "not recorded");
 function formatComparison(c) {
-  const lines = [`Panel: ${c.panel ?? "ad-hoc"} \u2014 "${c.question}"`, "", "Verdicts"];
-  for (const v of c.verdicts) lines.push(`- ${v.persona} \u2014 ${v.status === "ok" ? `${v.verdict}${v.tension ? ` (${v.tension})` : ""}` : `${v.status}${v.reason ? ` (${v.reason})` : ""}`}`);
-  const section = (title, rows) => {
+  const tagged = c.verdicts.some((v) => v.model !== null);
+  const tagOf = new Map(c.verdicts.map((v) => [v.persona, ` [${modelTag(v)}]`]));
+  const lines = [`Panel: ${c.panel ?? "ad-hoc"} \u2014 "${c.question}"`];
+  if (tagged) lines.push(`Models: ${c.verdicts.map((v) => `${v.persona} [${modelTag(v)}]`).join(", ")}`);
+  lines.push("", "Verdicts");
+  for (const v of c.verdicts) {
+    const body = v.status === "ok" ? `${v.verdict}${v.tension ? ` (${v.tension})` : ""}` : `${v.status}${v.reason ? ` (${v.reason})` : ""}`;
+    lines.push(`- ${v.persona} \u2014 ${body}${tagged ? tagOf.get(v.persona) : ""}`);
+  }
+  const section = (title, rows, tagCells) => {
     lines.push("", title);
     if (rows.length === 0) lines.push("- (none)");
-    for (const r of rows) lines.push(`- ${r.unit} [${r.class}]`, ...r.cells.map((x) => `    ${cellText(x)}`));
+    for (const r of rows) lines.push(`- ${r.unit} [${r.class}]`, ...r.cells.map((x) => `    ${cellText(x)}${tagCells ? tagOf.get(x.persona) ?? "" : ""}`));
   };
-  section("Where they disagree", c.units.filter((u) => u.class === "split" || u.class === "single-voice"));
-  section("Where they agree", c.units.filter((u) => u.class === "all-flag"));
+  section("Where they disagree", c.units.filter((u) => u.class === "split" || u.class === "single-voice"), c.mixedModels);
+  section("Where they agree", c.units.filter((u) => u.class === "all-flag"), false);
   lines.push(`- ${c.units.filter((u) => u.class === "none").length} unit(s) nobody raised`);
   lines.push("", "Outside their scope");
   if (c.outsideScope.length === 0) lines.push("- (none)");
@@ -10151,7 +10286,7 @@ ${content.join("\n")}
 var OWNED = {
   unit: { fields: ["description", "applies_when", "threshold"], sections: ["Looks for", "Questions", "Red flags", "Good looks like"] },
   panel: { fields: ["description", "personas"], sections: [""] },
-  persona: { fields: ["description", "units.primary", "units.secondary", "units.deprioritized"], sections: ["Stance", "Tie-breaking"] }
+  persona: { fields: ["description", "model", "units.primary", "units.secondary", "units.deprioritized"], sections: ["Stance", "Tie-breaking"] }
 };
 var KEPT = { primary: ["add_questions", "add_red_flags"], secondary: [], deprioritized: [] };
 function templateFor(kind, name, extendsRef) {
@@ -10198,6 +10333,7 @@ function checkValue(kind, path, v) {
   if (path === "extends") return typeof v === "string" && REF.test(v) ? void 0 : '"extends" must be a valid persona reference';
   if (path === "threshold") return typeof v === "string" && SEVERITIES.includes(v) ? void 0 : `"threshold" must be one of ${SEVERITIES.join(", ")}`;
   if (path === "personas") return Array.isArray(v) && v.every((x) => typeof x === "string" && REF.test(x)) ? void 0 : '"personas" must be a list of persona names';
+  if (path === "model") return isPanelModel(v) ? void 0 : `"model" must be one of ${PANEL_MODELS.join(", ")}`;
   if (path.startsWith("units.")) {
     if (!Array.isArray(v)) return `"${path}" must be a list of { ref, threshold?, note? }`;
     for (const e of v) {
@@ -10487,6 +10623,14 @@ function authorCmd(d, a, env) {
   }
 }
 
+// src/cli/lineup.ts
+function lineupCmd(reg, base2, p, env) {
+  const l = resolveLineup(reg, { names: p.names, model: p.model });
+  const diagnostics = [...base2, ...l.diagnostics];
+  env.out(JSON.stringify({ panel: l.panel, panelists: l.panelists, diagnostics: diagnostics.map(diagnosticJson) }, null, 2));
+  return hasErrors(diagnostics) ? 1 : 0;
+}
+
 // src/runs/store.ts
 import { randomInt } from "node:crypto";
 import { chmodSync as chmodSync2, existsSync as existsSync6, mkdirSync as mkdirSync4, readdirSync as readdirSync3, readFileSync as readFileSync11, realpathSync as realpathSync2, statSync as statSync5 } from "node:fs";
@@ -10669,7 +10813,8 @@ function createRun(home, cwd2, deps = {}) {
   }
 }
 var nullableString = (v) => v === null || typeof v === "string";
-var validPanelistRow = (v) => typeof v === "object" && v !== null && typeof v.persona === "string" && typeof v.status === "string" && nullableString(v.verdict);
+var absentOrNullableString = (v) => v === void 0 || nullableString(v);
+var validPanelistRow = (v) => typeof v === "object" && v !== null && typeof v.persona === "string" && typeof v.status === "string" && nullableString(v.verdict) && absentOrNullableString(v.model) && absentOrNullableString(v.modelSource);
 function readMeta(dir) {
   let data;
   try {
@@ -10693,7 +10838,7 @@ function recordComparison(dir, c, at) {
     ...meta,
     question: c.question,
     panel: c.panel,
-    panelists: c.verdicts.map((v) => ({ persona: v.persona, status: v.status, verdict: v.verdict })),
+    panelists: c.verdicts.map((v) => ({ persona: v.persona, status: v.status, verdict: v.verdict, model: v.model, modelSource: v.modelSource })),
     comparedAt: at.toISOString()
   };
   try {
@@ -10872,6 +11017,7 @@ var USAGE = [
   "  check-judgment <name> [--file <path>] [--checks <targets.json>]   validate a judgment (JSON from the file or stdin)",
   "  check-evidence [--file <path>]         validate an investigator's evidence (markdown from the file or stdin)",
   "  compare [--file <path>] [--json] [--record]   compare a panel's judgments (panel-result JSON); --record updates the run's meta.json",
+  "  lineup --json [--model <m>] <panel> [<member>@<m> \u2026] | <persona>[@<m>] \u2026   who sits on a panel and the model each runs on",
   "  runs new                               create a kept panel-run folder and print its path",
   "  runs list [--json]                     list kept panel runs, newest first",
   "  targets --from <file.md> [--out <targets.json>]   extract a step file's adversarial review targets",
@@ -10905,6 +11051,7 @@ function describeEffective(p) {
     `deprioritized: ${list3(p.units.deprioritized, false)}`,
     `capabilities:  ${caps}`,
     `panel tools:   ${panelTools(p).join(", ")}`,
+    ...p.model ? [`model:         ${p.model} (default for panels)`] : [],
     "inputs:",
     ...p.inputs.map((f) => `  ${f}`)
   ].join("\n");
@@ -11034,7 +11181,7 @@ var ONLY = {
   expectHash: "--expect-hash is only accepted by save, patch and delete",
   force: "--force is only accepted by delete",
   panel: "--panel is only accepted by prompt",
-  json: "--json is only accepted by list, runs list, compare, gate, show, save, patch and delete"
+  json: "--json is only accepted by list, lineup, runs list, compare, gate, show, save, patch and delete"
 };
 function parseArgv(argv2, baseCwd) {
   let cwd2 = baseCwd;
@@ -11050,6 +11197,7 @@ function parseArgv(argv2, baseCwd) {
   let expectHash;
   let force = false;
   let record = false;
+  let model;
   const positional = [];
   for (let i = 0; i < argv2.length; i++) {
     const a = argv2[i];
@@ -11088,6 +11236,11 @@ function parseArgv(argv2, baseCwd) {
       force = true;
     } else if (a === "--record") {
       record = true;
+    } else if (a === "--model") {
+      const v = argv2[++i];
+      if (!v || v.startsWith("-")) return { kind: "usage", message: "--model needs a model" };
+      if (model !== void 0) return { kind: "usage", message: "--model may be given only once" };
+      model = v;
     } else if (a === "--checks" || a === "--from" || a === "--out") {
       const v = argv2[++i];
       if (!v) return { kind: "usage", message: `${a} needs a path` };
@@ -11103,6 +11256,16 @@ function parseArgv(argv2, baseCwd) {
     }
   }
   if (record && positional[0] !== "compare") return { kind: "usage", message: "--record is only accepted by compare" };
+  if (model !== void 0 && positional[0] !== "lineup") return { kind: "usage", message: "--model is only accepted by lineup" };
+  if (positional[0] === "lineup") {
+    const names = positional.slice(1);
+    if (scopeSeen || panel || file !== void 0 || expectHash !== void 0 || force || checks !== void 0 || from !== void 0 || out !== void 0) {
+      return { kind: "usage", message: "lineup accepts only --cwd, --json and --model" };
+    }
+    if (!json) return { kind: "usage", message: "lineup needs --json" };
+    if (names.length === 0) return { kind: "usage", message: "lineup needs a saved panel, or 2 to 6 personas" };
+    return { kind: "lineup", cwd: cwd2, names, model };
+  }
   if (positional[0] === "check-evidence") {
     if (positional.length > 1) return { kind: "usage", message: "check-evidence takes no name; pass the evidence with --file or on stdin" };
     if (scopeSeen || json || panel || expectHash !== void 0 || force || checks !== void 0 || from !== void 0 || out !== void 0) return { kind: "usage", message: "check-evidence accepts only --file" };
@@ -11169,6 +11332,9 @@ function parseArgv(argv2, baseCwd) {
   }
   return { kind: "command", cwd: cwd2, command: cmd, name, scope, json, panel, file, record, checks, from, fromGiven, out };
 }
+function needsPluginData(p) {
+  return p.kind === "command" && p.command !== "targets" || p.kind === "author" || p.kind === "lineup";
+}
 function run(argv2, env) {
   const parsed2 = parseArgv(argv2, env.cwd);
   if (parsed2.kind === "help") {
@@ -11191,6 +11357,10 @@ function run(argv2, env) {
     selfPluginRoot: env.selfPluginRoot
   });
   if (parsed2.kind === "author") return authorCmd(d, parsed2, env);
+  if (parsed2.kind === "lineup") {
+    const lineupReg = new Registry(d.scopes);
+    return lineupCmd(lineupReg, [...d.diagnostics, ...lineupReg.diagnostics], parsed2, env);
+  }
   const { command, name, scope } = parsed2;
   const reg = new Registry(d.scopes);
   const dropped = d.project.droppedClaudeDir !== void 0;
@@ -11240,8 +11410,8 @@ function pluginList(cwd2) {
 var argv = process.argv.slice(2);
 var cwd = process.cwd();
 var parsed = parseArgv(argv, cwd);
-var needsPlugins = parsed.kind === "command" && parsed.command !== "targets" || parsed.kind === "author";
-var pl = needsPlugins ? pluginList(parsed.cwd) : {};
+var needsPlugins = needsPluginData(parsed);
+var pl = needsPlugins && "cwd" in parsed ? pluginList(parsed.cwd) : {};
 process.exitCode = run(argv, {
   cwd,
   home: process.env.PERSONA_HOME ?? homedir(),

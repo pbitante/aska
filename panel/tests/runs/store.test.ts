@@ -18,8 +18,8 @@ const comparison = (over: Partial<Comparison> = {}): Comparison => ({
   question: 'Ship?',
   panel: 'code',
   verdicts: [
-    { persona: 'aska:guardian', status: 'ok', verdict: 'proceed-with-conditions', reason: null },
-    { persona: 'aska:skeptic', status: 'timeout', verdict: null, reason: 'timed out after 10 min' },
+    { persona: 'aska:guardian', status: 'ok', verdict: 'proceed-with-conditions', reason: null, model: 'opus', modelSource: 'panel' },
+    { persona: 'aska:skeptic', status: 'timeout', verdict: null, reason: 'timed out after 10 min', model: null, modelSource: 'session' },
   ],
   units: [],
   outsideScope: [],
@@ -275,8 +275,8 @@ describe('recordComparison', () => {
       question: 'Ship?',
       panel: 'code',
       panelists: [
-        { persona: 'aska:guardian', status: 'ok', verdict: 'proceed-with-conditions' },
-        { persona: 'aska:skeptic', status: 'timeout', verdict: null },
+        { persona: 'aska:guardian', status: 'ok', verdict: 'proceed-with-conditions', model: 'opus', modelSource: 'panel' },
+        { persona: 'aska:skeptic', status: 'timeout', verdict: null, model: null, modelSource: 'session' },
       ],
       comparedAt: '2026-10-09T20:19:40.000Z',
     });

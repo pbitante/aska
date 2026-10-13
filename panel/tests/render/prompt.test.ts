@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { EffectivePersona } from '../../src/model/effective';
 import { renderPrompt } from '../../src/render/prompt';
+import { resolvePersona } from '../../src/resolve/resolve';
 import { exampleFiles, resolveExample } from '../helpers/example';
-import { personaMd } from '../helpers/md';
+import { personaMd, unitMd } from '../helpers/md';
+import { registryFor } from '../helpers/scopes';
 
 describe('renderPrompt', () => {
   const { effective } = resolveExample();
@@ -116,5 +118,13 @@ describe('renderPrompt', () => {
     expect(panel).toContain('`investigate`');
     const example = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(panel)![1]!) as { investigate: unknown[] };
     expect(example.investigate).toEqual([{ what: '...', why: '...', tools: ['...'] }]);
+  });
+
+  it('never puts a persona model into the prompt', () => {
+    const eff = (extra: string[]) => resolvePersona(registryFor({
+      'user/units/a.md': unitMd('a'),
+      'user/personas/p.md': personaMd(['name: p', 'description: P.', ...extra, 'units:', '  primary: [a]']),
+    }).reg, 'p').effective!;
+    for (const mode of ['panel', 'swap'] as const) expect(renderPrompt(eff(['model: haiku']), mode)).toBe(renderPrompt(eff([]), mode));
   });
 });

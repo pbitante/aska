@@ -242,4 +242,40 @@ describe('parsePersona', () => {
     );
     expect(r.diagnostics[0]!.loc!.line).toBe(8);
   });
+
+  describe('model', () => {
+    const root = (model: string) => parse('m', ['name: m', 'description: M.', `model: ${model}`, 'units:', '  primary: [a]']);
+
+    it('accepts every model in the vocabulary, fable included', () => {
+      for (const m of ['haiku', 'sonnet', 'opus', 'fable']) {
+        const r = root(m);
+        expect(codes(r), m).toEqual([]);
+        expect(r.persona!.model).toBe(m);
+      }
+    });
+
+    it('treats null and absence as no model', () => {
+      expect(root('null').persona!.model).toBeUndefined();
+      expect(parse('m', ['name: m', 'description: M.', 'units:', '  primary: [a]']).persona!.model).toBeUndefined();
+    });
+
+    it('rejects a non-string', () => {
+      const r = root('[sonnet]');
+      expect(codes(r)).toEqual(['E_FIELD_TYPE']);
+      expect(r.diagnostics[0]!.message).toBe('"model" must be one of haiku, sonnet, opus, fable');
+    });
+
+    it('rejects an unknown model, case-sensitively, with a did-you-mean', () => {
+      const upper = root('Sonnet');
+      expect(codes(upper)).toEqual(['E_PERSONA_MODEL']);
+      expect(upper.diagnostics[0]!.message).toBe('unknown model "Sonnet"');
+      expect(upper.diagnostics[0]!.fix).toBe('Did you mean "sonnet"?');
+      const far = root('gpt-5');
+      expect(far.diagnostics[0]!.fix).toBe('Use one of haiku, sonnet, opus, fable');
+    });
+
+    it('is not an unknown field', () => {
+      expect(codes(root('opus'))).not.toContain('W_UNKNOWN_FIELD');
+    });
+  });
 });
