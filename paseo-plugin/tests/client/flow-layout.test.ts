@@ -4,14 +4,18 @@ import { describe, expect, it } from "vitest";
 import type { Bounds } from "../../client/logic/flow/camera";
 import {
   CAPTION_PITCH,
+  CAPTION_W,
   captionBoxes,
+  captionFrame,
   DOT_R,
   edgeBox,
   evidenceRings,
   flowLayout,
   INNER_MIN,
+  LABEL_H,
   LABEL_W,
   liveCaptionRoom,
+  MARKER_GAP,
   panelistRadius,
   RING_GAP,
   ringCapacity,
@@ -21,6 +25,7 @@ import {
   type FlowLayout,
   type FlowMode,
 } from "../../client/logic/flow/layout";
+import { fit } from "../../client/logic/flow/camera";
 import { buildFlowModel, type FlowModel, type FlowUnit } from "../../client/logic/flow/model";
 import type { LiveRun, PanelistRow } from "../../shared/recognize";
 import { comparisonSchema, panelResultSchema, type RunReport } from "../../shared/runs";
@@ -276,8 +281,29 @@ describe("tracks", () => {
     for (const l of [flowLayout(trio, "tracks"), flowLayout(synth(12, 0, 30), "tracks")]) {
       const labelRight = l.rows[0]!.x + LABEL_W;
       for (const d of l.nodes.filter((n) => n.kind === "dot")) expect(d.x - d.r).toBeGreaterThanOrEqual(labelRight);
-      for (const row of l.rows) expect(byId(l, `u:${row.unit}`).x).toBe(row.x + 4);
       expect(l.dotR).toBe(DOT_R);
+    }
+  });
+  it("starts every row label clear of its unit marker (#1)", () => {
+    for (const l of [flowLayout(trio, "tracks"), flowLayout(synth(12, 0, 30), "tracks")])
+      for (const row of l.rows) {
+        const marker = byId(l, `u:${row.unit}`);
+        expect(marker.y).toBe(row.y);
+        expect(row.x).toBeGreaterThanOrEqual(marker.x + marker.r + MARKER_GAP);
+      }
+  });
+  it("holds the last row, quiet or not, inside bounds, and Fit frames it (#1)", () => {
+    for (const model of [trio, five, synth(3, 0, 7), synth(12, 0, 30)]) {
+      const l = flowLayout(model, "tracks");
+      const last = l.rows[l.rows.length - 1]!;
+      const marker = byId(l, `u:${last.unit}`);
+      expect(last.y + LABEL_H / 2).toBeLessThanOrEqual(l.bounds.y + l.bounds.height);
+      expect(marker.y + marker.r).toBeLessThanOrEqual(l.bounds.y + l.bounds.height);
+      for (const vp of [{ width: 700, height: 320 }, { width: 1280, height: 420 }, { width: 360, height: 320 }]) {
+        const cam = fit(l.bounds, vp);
+        expect(cam.y + (last.y + LABEL_H / 2) * cam.scale).toBeLessThanOrEqual(vp.height);
+        expect(cam.y + (l.rows[0]!.y - LABEL_H / 2) * cam.scale).toBeGreaterThanOrEqual(0);
+      }
     }
   });
   it("spaces the legend at least a caption pitch apart, widening the world", () => {
@@ -329,6 +355,23 @@ describe("an all-quiet run", () => {
 });
 
 describe("helpers", () => {
+  it("gives a caption its full reserved width at zoom 1, centred under its node (#1)", () => {
+    for (const r of [8, 10, 12, 14, 18]) {
+      const f = captionFrame(r);
+      expect(f.width).toBe(CAPTION_W);
+      expect(f.left + f.width / 2).toBe(r);
+      expect(f.top).toBeGreaterThan(2 * r);
+    }
+  });
+  it("draws each caption exactly where its reserved caption box is", () => {
+    const l = flowLayout(five, "map");
+    const boxes = captionBoxes(l);
+    for (const n of l.nodes.filter((n) => n.kind !== "chair")) {
+      const f = captionFrame(n.r);
+      const drawn = { x: n.x - n.r + f.left, y: n.y - n.r + f.top, width: f.width };
+      expect(boxes.some((b) => Math.abs(b.x - drawn.x) < 1e-9 && Math.abs(b.y - drawn.y) < 1e-9 && b.width === drawn.width), n.id).toBe(true);
+    }
+  });
   it("computes an edge box for a rotated line", () => {
     expect(edgeBox({ x: 0, y: 0 }, { x: 10, y: 0 })).toEqual({ left: 0, top: 0, length: 10, angle: 0 });
     const v = edgeBox({ x: 0, y: 0 }, { x: 0, y: 10 });
