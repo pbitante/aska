@@ -29,6 +29,7 @@ const pl = needsPlugins ? pluginList(parsed.cwd) : {};
 process.exitCode = run(argv, {
   cwd,
   home: process.env.PERSONA_HOME ?? homedir(),
+  runsEnv: process.env,
   pluginListJson: pl.json,
   pluginListUnavailableReason: pl.reason,
   selfPluginRoot,

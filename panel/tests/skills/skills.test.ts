@@ -66,13 +66,16 @@ describe('plugin packaging', () => {
     }
     expect(readme).toContain('~/.claude/aska/runs/');
     expect(readme).toContain('Nothing prunes them');
+    expect(readme).toContain('ASKA_RUNS_DIR');
+    expect(readme).toContain('bare');
+    expect(operator).toContain('ASKA_RUNS_DIR');
   });
 
-  it('is version 0.7.1 everywhere', () => {
-    expect(JSON.parse(readFileSync(join(repo, '.claude-plugin/plugin.json'), 'utf8')).version).toBe('0.7.1');
-    expect(JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version).toBe('0.7.1');
+  it('is version 0.7.2 everywhere', () => {
+    expect(JSON.parse(readFileSync(join(repo, '.claude-plugin/plugin.json'), 'utf8')).version).toBe('0.7.2');
+    expect(JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version).toBe('0.7.2');
     const lock = JSON.parse(readFileSync(join(repo, 'package-lock.json'), 'utf8'));
-    expect([lock.version, lock.packages[''].version]).toEqual(['0.7.1', '0.7.1']);
+    expect([lock.version, lock.packages[''].version]).toEqual(['0.7.2', '0.7.2']);
   });
 
   it('documents the gate commands and --checks in the operator skill', () => {

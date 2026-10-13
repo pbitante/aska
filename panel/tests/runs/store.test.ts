@@ -143,6 +143,118 @@ describe('createRun', () => {
   });
 });
 
+// A bare repository as `git init --bare` leaves it, plus an index once it has been used with a
+// work tree (`git --git-dir=<it> --work-tree=<folder> add …`).
+const bareRepo = (at: string, config = '[core]\n\tbare = true\n', withIndex = true): Record<string, string> => ({
+  [`${at}/HEAD`]: 'ref: refs/heads/main\n',
+  [`${at}/config`]: config,
+  [`${at}/objects/.keep`]: '',
+  [`${at}/refs/heads/.keep`]: '',
+  ...(withIndex ? { [`${at}/index`]: 'DIRC' } : {}),
+});
+
+describe('createRun in a home tracked by a bare dotfiles repository', () => {
+  it('refuses a store whose home is the work tree of a bare repository kept in it, and names ASKA_RUNS_DIR', () => {
+    const root = makeTree({ ...bareRepo('home/.dotfiles'), 'p/x': '' });
+    const r = createRun(join(root, 'home'), join(root, 'p'), { now: () => AT });
+    if (!('diagnostic' in r)) throw new Error('expected a diagnostic');
+    expect(r.diagnostic.code).toBe('E_RUNS_IN_REPO');
+    expect(r.diagnostic.message).toContain(join(root, 'home'));
+    expect(r.diagnostic.message).toContain(join(root, 'home/.dotfiles'));
+    expect(r.diagnostic.fix).toContain('ASKA_RUNS_DIR');
+    expect(existsSync(runsRoot(join(root, 'home')))).toBe(false);
+  });
+
+  it('finds the bare repository in any folder above the store, whatever it is called', () => {
+    const root = makeTree({ ...bareRepo('users/.cfg'), 'p/x': '' });
+    const r = createRun(join(root, 'users/me'), join(root, 'p'), { now: () => AT });
+    expect('diagnostic' in r && r.diagnostic.code).toBe('E_RUNS_IN_REPO');
+  });
+
+  it('follows core.worktree when the bare repository sets it, relative to the repository', () => {
+    const inside = makeTree({ ...bareRepo('home/.dots', '[core]\n\tbare = false\n\tworktree = ..\n'), 'p/x': '' });
+    expect('diagnostic' in createRun(join(inside, 'home'), join(inside, 'p'), { now: () => AT })).toBe(true);
+    const elsewhere = makeTree({ ...bareRepo('home/.dots', '[core]\n\tbare = false\n\tworktree = "../../site"\n'), 'site/x': '', 'p/x': '' });
+    made(createRun(join(elsewhere, 'home'), join(elsewhere, 'p'), { now: () => AT }));
+  });
+
+  it('accepts a home holding a bare repository never used with a work tree (a mirror or backup clone)', () => {
+    const root = makeTree({ ...bareRepo('home/backup.git', undefined, false), 'p/x': '' });
+    made(createRun(join(root, 'home'), join(root, 'p'), { now: () => AT }));
+  });
+
+  it('refuses a store inside $GIT_WORK_TREE, or inside the core.worktree of $GIT_DIR', () => {
+    const root = makeTree({ ...bareRepo('repos/dots.git', '[core]\n\tbare = true\n\tworktree = ../../home\n'), 'home/x': '', 'p/x': '' });
+    const home = join(root, 'home');
+    const workTree = createRun(home, join(root, 'p'), { now: () => AT, env: { GIT_WORK_TREE: home } });
+    expect('diagnostic' in workTree && workTree.diagnostic.code).toBe('E_RUNS_IN_REPO');
+    const gitDir = createRun(home, join(root, 'p'), { now: () => AT, env: { GIT_DIR: join(root, 'repos/dots.git') } });
+    expect('diagnostic' in gitDir && gitDir.diagnostic.code).toBe('E_RUNS_IN_REPO');
+    made(createRun(home, join(root, 'p'), { now: () => AT }));
+  });
+});
+
+describe('ASKA_RUNS_DIR', () => {
+  it('keeps runs in the folder it names, owner-only, and lists them from there', () => {
+    const umask = process.umask(0o022);
+    try {
+      const root = makeTree({ 'p/x': '' });
+      const store = join(root, 'kept/runs');
+      mkdirSync(store, { recursive: true });
+      chmodSync(store, 0o755);
+      const env = { ASKA_RUNS_DIR: store };
+      const { dir } = made(createRun(join(root, 'home'), join(root, 'p'), { now: () => AT, suffix: fixed('Ab3xYz'), env }));
+      expect(dir).toBe(join(store, '20261009T201512Z-Ab3xYz'));
+      expect(statSync(store).mode & 0o777).toBe(0o700);
+      expect(statSync(dir).mode & 0o777).toBe(0o700);
+      expect(existsSync(runsRoot(join(root, 'home')))).toBe(false);
+      expect(listRuns(join(root, 'home'), env).runs.map((r) => r.path)).toEqual([dir]);
+      expect(listRuns(join(root, 'home')).runs).toEqual([]);
+    } finally {
+      process.umask(umask);
+    }
+  });
+
+  it('creates the folder it names when it does not exist yet', () => {
+    const root = makeTree({ 'p/x': '' });
+    const { dir } = made(createRun(join(root, 'home'), join(root, 'p'), { now: () => AT, env: { ASKA_RUNS_DIR: join(root, 'new/runs') } }));
+    expect(dirname(dir)).toBe(join(root, 'new/runs'));
+    expect(statSync(join(root, 'new/runs')).mode & 0o777).toBe(0o700);
+  });
+
+  it('treats an empty value as unset', () => {
+    const root = makeTree({ 'p/x': '' });
+    const { dir } = made(createRun(join(root, 'home'), join(root, 'p'), { now: () => AT, env: { ASKA_RUNS_DIR: '' } }));
+    expect(dirname(dir)).toBe(runsRoot(join(root, 'home')));
+  });
+
+  it('rejects a relative path or a path to a file with E_RUNS_DIR, for runs new and runs list alike', () => {
+    const root = makeTree({ 'a-file': 'x', 'p/x': '' });
+    for (const value of ['kept/runs', './runs', join(root, 'a-file')]) {
+      const env = { ASKA_RUNS_DIR: value };
+      const r = createRun(join(root, 'home'), join(root, 'p'), { now: () => AT, env });
+      if (!('diagnostic' in r)) throw new Error(`expected a diagnostic for ${value}`);
+      expect(r.diagnostic.code, value).toBe('E_RUNS_DIR');
+      expect(r.diagnostic.message, value).toContain('ASKA_RUNS_DIR');
+      expect(r.diagnostic.message, value).toContain(value);
+      expect(r.diagnostic.fix, value).toBeTruthy();
+      expect(listRuns(join(root, 'home'), env).diagnostic?.code, value).toBe('E_RUNS_DIR');
+    }
+    expect(existsSync(join(root, 'kept'))).toBe(false);
+  });
+
+  it('still refuses a folder inside a git working tree or a bare-repo-tracked home', () => {
+    const root = makeTree({ 'repo/.git/HEAD': '', ...bareRepo('home/.dotfiles'), 'p/x': '' });
+    for (const value of [join(root, 'repo/runs'), join(root, 'home/aska-runs')]) {
+      const r = createRun(join(root, 'elsewhere'), join(root, 'p'), { now: () => AT, env: { ASKA_RUNS_DIR: value } });
+      if (!('diagnostic' in r)) throw new Error(`expected a diagnostic for ${value}`);
+      expect(r.diagnostic.code, value).toBe('E_RUNS_IN_REPO');
+      expect(r.diagnostic.message, value).toContain(value);
+      expect(existsSync(value), value).toBe(false);
+    }
+  });
+});
+
 describe('recordComparison', () => {
   it('tightens a run folder kept before 0.6.1 to 0700 when it is next recorded', () => {
     const root = makeTree({ 'p/x': '' });

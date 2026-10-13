@@ -8,14 +8,14 @@ import { registryFor } from '../helpers/scopes';
 
 const AT = new Date('2026-10-09T20:15:12.345Z');
 
-function runsCli(now: () => Date = () => AT) {
+function runsCli(now: () => Date = () => AT, runsEnv: Record<string, string> = {}) {
   const { root } = registryFor(exampleFiles());
   const pluginListJson = JSON.stringify([{ id: 'acme@m', enabled: true, installPath: join(root, 'plugins/acme') }]);
   const home = join(root, 'home');
   const exec = (...argv: string[]) => {
     const out: string[] = [];
     const err: string[] = [];
-    const code = run(argv, { cwd: join(root, 'proj'), home, pluginListJson, now, columns: 120, out: (s) => out.push(s), err: (s) => err.push(s) });
+    const code = run(argv, { cwd: join(root, 'proj'), home, pluginListJson, now, runsEnv, columns: 120, out: (s) => out.push(s), err: (s) => err.push(s) });
     return { code, out: out.join('\n'), err: err.join('\n') };
   };
   return { root, home, exec };
@@ -48,6 +48,28 @@ describe('persona runs new', () => {
     const r = exec('runs', 'new');
     expect(r.code).toBe(1);
     expect(r.out).toContain('E_RUNS_WRITE');
+  });
+});
+
+describe('ASKA_RUNS_DIR in the CLI', () => {
+  it('keeps and lists runs in the folder it names', () => {
+    const { root } = registryFor(exampleFiles());
+    const store = join(root, 'kept-runs');
+    const { exec } = runsCli(() => AT, { ASKA_RUNS_DIR: store });
+    const r = exec('runs', 'new');
+    expect(r.code).toBe(0);
+    expect(r.out.startsWith(`${store}/`)).toBe(true);
+    const rows = JSON.parse(exec('runs', 'list', '--json').out) as { path: string }[];
+    expect(rows.map((x) => x.path)).toEqual([r.out]);
+  });
+
+  it('exits 1 with E_RUNS_DIR for a relative path, for runs new and runs list', () => {
+    const { exec } = runsCli(() => AT, { ASKA_RUNS_DIR: 'relative/runs' });
+    for (const sub of ['new', 'list']) {
+      const r = exec('runs', sub);
+      expect(r.code, sub).toBe(1);
+      expect(r.out, sub).toContain('E_RUNS_DIR');
+    }
   });
 });
 

@@ -4,7 +4,7 @@ import type { CliEnv } from './main';
 
 export function runsCmd(p: { cwd: string; command: 'new' | 'list'; json: boolean }, env: CliEnv): number {
   if (p.command === 'new') {
-    const r = createRun(env.home, p.cwd, { now: env.now });
+    const r = createRun(env.home, p.cwd, { now: env.now, env: env.runsEnv });
     if ('diagnostic' in r) {
       env.out(formatDiagnostic(r.diagnostic));
       return 1;
@@ -12,7 +12,11 @@ export function runsCmd(p: { cwd: string; command: 'new' | 'list'; json: boolean
     env.out(r.dir);
     return 0;
   }
-  const { runs, skipped } = listRuns(env.home);
+  const { runs, skipped, diagnostic } = listRuns(env.home, env.runsEnv);
+  if (diagnostic) {
+    env.out(formatDiagnostic(diagnostic));
+    return 1;
+  }
   // Warnings go to stderr so `--json` stdout stays pure JSON.
   for (const s of skipped) (env.err ?? env.out)(`warning: skipped ${s.path}: ${s.reason}`);
   if (p.json) {

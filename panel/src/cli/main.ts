@@ -18,7 +18,7 @@ import { Registry } from '../scopes/registry';
 import { diagnosticJson } from '../author/files';
 import { authorCmd } from './author';
 import { runsCmd } from './runs';
-import { recordComparison } from '../runs/store';
+import { recordComparison, type RunEnv } from '../runs/store';
 import { gateCmd, targetsCmd } from './gate';
 import type { FileKind, FileRef } from '../model/types';
 
@@ -35,6 +35,8 @@ export interface CliEnv {
   stdinIsTTY?: boolean;
   // The clock for `runs new` and `compare --record`; tests inject a fixed one.
   now?: () => Date;
+  // ASKA_RUNS_DIR, GIT_DIR and GIT_WORK_TREE for `runs`; the CLI passes process.env, tests their own.
+  runsEnv?: RunEnv;
 }
 
 const USAGE = [

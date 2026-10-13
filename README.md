@@ -14,6 +14,7 @@ aska's files in forms and replays its panel runs.
 | --- | --- |
 | [`panel/`](panel/README.md) | The Claude Code plugin `aska`: the skills `/aska:panel`, `/aska:author`, `/aska:operator` and `/aska:gate`, plus starter units, personas and panels. |
 | [`paseo-plugin/`](paseo-plugin/README.md) | The Paseo plugin `aska-editor`: the form editor, the panel-run side panel, archived runs and the Flow replay. |
+| [`panel/CHANGELOG.md`](panel/CHANGELOG.md), [`paseo-plugin/CHANGELOG.md`](paseo-plugin/CHANGELOG.md) | What changed in each release of `aska` and `aska-editor`; each version's section is its GitHub release notes. |
 | [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json) | The Claude Code marketplace that lists `aska`. |
 
 ## Install

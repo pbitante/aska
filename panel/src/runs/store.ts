@@ -1,12 +1,12 @@
 import { randomInt } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { writeAtomic } from '../fs';
 import { err, type Diagnostic } from '../diagnostics';
 import type { Comparison } from '../panel/compare';
 import { findGitRoot } from '../scopes/discover';
 
-// A kept panel run: <home>/.claude/aska/runs/<id>/ with the skill's files plus meta.json.
+// A kept panel run: <home>/.claude/aska/runs/<id>/ (or $ASKA_RUNS_DIR/<id>/) with the skill's files plus meta.json.
 export const RUN_ID = /^\d{8}T\d{6}Z-[A-Za-z0-9]{6}$/;
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const ATTEMPTS = 5;
@@ -25,9 +25,31 @@ export interface RunMeta {
   [key: string]: unknown;
 }
 export interface RunRow extends RunMeta { path: string }
-export interface RunDeps { now?: () => Date; suffix?: () => string }
+// The environment variables the run store reads. The CLI passes process.env; tests pass their own.
+export interface RunEnv { ASKA_RUNS_DIR?: string; GIT_DIR?: string; GIT_WORK_TREE?: string }
+export interface RunDeps { now?: () => Date; suffix?: () => string; env?: RunEnv }
 
 export const runsRoot = (home: string): string => join(resolve(home), '.claude', 'aska', 'runs');
+
+// The run store: $ASKA_RUNS_DIR when it's set and not empty, else <home>/.claude/aska/runs.
+// ASKA_RUNS_DIR must be absolute and, if it already exists, a directory the user owns, so it can
+// be kept owner-only like the default.
+export function runsDir(home: string, env: RunEnv = {}): { root: string } | { diagnostic: Diagnostic } {
+  const value = env.ASKA_RUNS_DIR;
+  if (value === undefined || value === '') return { root: runsRoot(home) };
+  const bad = (why: string, fix: string) => ({ diagnostic: err('E_RUNS_DIR', `ASKA_RUNS_DIR ${JSON.stringify(value)} ${why}`, undefined, fix) });
+  if (!isAbsolute(value)) return bad('is not an absolute path', 'Set ASKA_RUNS_DIR to an absolute path, or unset it to keep runs in ~/.claude/aska/runs');
+  let st;
+  try {
+    st = statSync(value);
+  } catch {
+    return { root: resolve(value) };
+  }
+  if (!st.isDirectory()) return bad('is not a directory', 'Point ASKA_RUNS_DIR at a folder (it is created if it does not exist)');
+  const uid = process.getuid?.();
+  if (uid !== undefined && st.uid !== uid) return bad('is owned by another user, so it cannot be kept owner-only', 'Point ASKA_RUNS_DIR at a folder you own');
+  return { root: resolve(value) };
+}
 
 export function randomSuffix(): string {
   let s = '';
@@ -56,6 +78,96 @@ function realAncestor(path: string): string {
   return tail.length > 0 ? join(realpathSync(existing), ...tail) : realpathSync(existing);
 }
 
+const inside = (path: string, dir: string): boolean => {
+  const rel = relative(dir, path);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+};
+
+const realOrSelf = (path: string): string => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+};
+
+// The [core] bare and worktree settings of a git directory's config. Just enough of git's config
+// syntax for what `git init` and `git config core.worktree` write.
+function coreConfig(gitDir: string): { bare: boolean; worktree?: string } {
+  let text: string;
+  try {
+    text = readFileSync(join(gitDir, 'config'), 'utf8');
+  } catch {
+    return { bare: false };
+  }
+  let core = false;
+  let bare = false;
+  let worktree: string | undefined;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    const section = /^\[\s*([A-Za-z0-9.-]+)\s*(?:"[^"]*")?\s*\]/.exec(line);
+    if (section) {
+      core = section[1]!.toLowerCase() === 'core';
+      continue;
+    }
+    const kv = /^([A-Za-z][A-Za-z0-9-]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (!core || !kv) continue;
+    const value = kv[2]!.replace(/^"(.*)"$/, '$1');
+    if (kv[1]!.toLowerCase() === 'bare') bare = /^(true|yes|on|1)$/i.test(value);
+    if (kv[1]!.toLowerCase() === 'worktree') worktree = resolve(gitDir, value);
+  }
+  return { bare, worktree };
+}
+
+const isGitDir = (dir: string): boolean => {
+  try {
+    return statSync(join(dir, 'HEAD')).isFile() && statSync(join(dir, 'objects')).isDirectory() && statSync(join(dir, 'refs')).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+// The work tree a git directory outside its work tree tracks: core.worktree when set; else, for a
+// bare repository that has an index (it has been used with --work-tree), the folder holding it —
+// the bare dotfiles convention, `git init --bare ~/.dotfiles` used as
+// `git --git-dir=~/.dotfiles --work-tree=~`. A bare repository with no index (a mirror or a
+// backup clone) tracks nothing.
+function separateWorkTree(gitDir: string): string | undefined {
+  const { bare, worktree } = coreConfig(gitDir);
+  if (worktree) return worktree;
+  return bare && existsSync(join(gitDir, 'index')) ? dirname(resolve(gitDir)) : undefined;
+}
+
+// The git work tree that contains `path`, and the repository that tracks it, if any: an ordinary
+// repository or worktree (a .git folder or file in `path` or above it); $GIT_WORK_TREE, or the
+// core.worktree of $GIT_DIR; or a bare repository kept directly in `path` or any folder above it
+// whose work tree (see separateWorkTree) contains `path`.
+export function enclosingWorkTree(path: string, env: RunEnv = {}): { workTree: string; gitDir?: string } | undefined {
+  const real = realAncestor(path);
+  const git = findGitRoot(real);
+  if (git) return { workTree: git };
+  if (env.GIT_WORK_TREE && inside(real, realOrSelf(env.GIT_WORK_TREE))) return { workTree: env.GIT_WORK_TREE };
+  if (env.GIT_DIR) {
+    const wt = separateWorkTree(env.GIT_DIR);
+    if (wt && inside(real, realOrSelf(wt))) return { workTree: wt, gitDir: env.GIT_DIR };
+  }
+  for (let d = real; ; d = dirname(d)) {
+    let names: string[] = [];
+    try {
+      names = readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory() && e.name !== '.git').map((e) => e.name);
+    } catch {
+      // Not there yet, or unreadable: nothing to find in it.
+    }
+    for (const name of names) {
+      const gitDir = join(d, name);
+      if (!isGitDir(gitDir)) continue;
+      const wt = separateWorkTree(gitDir);
+      if (wt && inside(real, realOrSelf(wt))) return { workTree: wt, gitDir };
+    }
+    if (dirname(d) === d) return undefined;
+  }
+}
+
 // Runs are owner-only. Folders made before 0.6.1 (or a root made by hand) may be looser, so tighten
 // them when they're next used. Best effort: a folder the user doesn't own is left as it is.
 function ownerOnly(path: string): void {
@@ -68,14 +180,18 @@ function ownerOnly(path: string): void {
 }
 
 export function createRun(home: string, cwd: string, deps: RunDeps = {}): { dir: string; meta: RunMeta } | { diagnostic: Diagnostic } {
-  const root = runsRoot(home);
+  const env = deps.env ?? {};
+  const where = runsDir(home, env);
+  if ('diagnostic' in where) return where;
+  const { root } = where;
   // Runs hold briefs and judgments that may quote code or secrets: never keep them anywhere git
   // could pick them up, whichever repository that is.
-  const repo = findGitRoot(realAncestor(root));
+  const repo = enclosingWorkTree(root, env);
   if (repo) {
+    const tree = repo.gitDir ? `${repo.workTree}, the work tree of the git repository ${repo.gitDir}` : `the git working tree ${repo.workTree}`;
     return {
-      diagnostic: err('E_RUNS_IN_REPO', `the run store ${root} is inside the git working tree ${repo}`, undefined,
-        `Move the run store out of ${repo}: move ${root} to a folder outside any git working tree and symlink it back at ${root}, or set PERSONA_HOME in the environment Claude Code runs in to a home outside every git working tree — runs then go in $PERSONA_HOME/.claude/aska/runs, and this also moves your user-scope personas and units`),
+      diagnostic: err('E_RUNS_IN_REPO', `the run store ${root} is inside ${tree}`, undefined,
+        `Move the run store out of ${repo.workTree}: set ASKA_RUNS_DIR in the environment Claude Code runs in to an absolute path outside every git working tree; or move ${root} to such a folder and symlink it back at ${root}; or set PERSONA_HOME to a home outside every git working tree — runs then go in $PERSONA_HOME/.claude/aska/runs, and this also moves your user-scope personas and units`),
     };
   }
   const git = findGitRoot(cwd);
@@ -164,8 +280,10 @@ export function recordComparison(dir: string, c: Comparison, at: Date): string |
   }
 }
 
-export function listRuns(home: string): { runs: RunRow[]; skipped: { path: string; reason: string }[] } {
-  const root = runsRoot(home);
+export function listRuns(home: string, env: RunEnv = {}): { runs: RunRow[]; skipped: { path: string; reason: string }[]; diagnostic?: Diagnostic } {
+  const where = runsDir(home, env);
+  if ('diagnostic' in where) return { runs: [], skipped: [], diagnostic: where.diagnostic };
+  const { root } = where;
   if (!existsSync(root)) return { runs: [], skipped: [] };
   const names = readdirSync(root, { withFileTypes: true })
     .filter((e) => e.isDirectory() && RUN_ID.test(e.name))

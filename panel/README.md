@@ -300,7 +300,7 @@ found:
 | `persona check-judgment <name> [--file <path>] [--checks <targets.json>]` | validates a judgment (read from `<path>` or stdin) against a persona's contract, and against the targets when `--checks` is given |
 | `persona check-evidence [--file <path>]` | validates an investigator's evidence (markdown, read from `<path>` or stdin): its four sections, in order, each with content |
 | `persona compare [--file <path>] [--json] [--record]` | compares a panel's judgments (panel-result JSON, read from `<path>` or stdin) and reports agreement, disagreement and follow-ups; `--record` also updates the `meta.json` of the kept run that holds `<path>` |
-| `persona runs new` | creates a kept panel-run folder under `~/.claude/aska/runs/<id>/` with its `meta.json` and prints its path |
+| `persona runs new` | creates a kept panel-run folder under `~/.claude/aska/runs/<id>/` (or `$ASKA_RUNS_DIR/<id>/`) with its `meta.json` and prints its path |
 | `persona runs list [--json]` | lists kept panel runs, newest first; `--json` gives each run's `meta.json` plus its `path` |
 | `persona targets --from <file.md> [--out <targets.json>]` | extracts a step file's `## Adversarial review targets` as numbered targets (`T1`, `T2.1`, …) |
 | `persona gate [<name>] --file <judgment.json> --checks <targets.json> [--json]` | decides a gate judgment, validated against persona `<name>` (default `gate`) whatever persona the judgment names: `pass`, `pass-with-conditions` or `fail` (exit 1); exit 2, with no result, when either file can't be read |
@@ -320,12 +320,22 @@ inside the project, so a cloned repository can't aim a write at your own files.
 The panel skill keeps every run in `~/.claude/aska/runs/<id>/`, never inside a git working tree: the
 brief, the materials, each judgment, `panel-result.json` and a `meta.json` (project, question,
 panel, panelists' verdicts, when it started and was last compared). If that folder would sit inside
-any repository or worktree, `runs new` refuses with `E_RUNS_IN_REPO`. To move the store, either move
-`~/.claude/aska/runs` to a folder outside any git working tree and symlink it back at
-`~/.claude/aska/runs`, or set `PERSONA_HOME` in the environment Claude Code runs in to a home outside
-every git working tree (runs then go in `$PERSONA_HOME/.claude/aska/runs`) — the latter also moves
-your user-scope personas and units, since `PERSONA_HOME` is the CLI's whole home, not just the run
-store. The store and each run folder are owner-only (0700). A run folder kept before 0.6.1 may
+any repository or worktree, `runs new` refuses with `E_RUNS_IN_REPO`. That includes a home tracked
+by a bare dotfiles repository (`git --git-dir=~/.dotfiles --work-tree=~`): a bare repository kept
+directly in the store's folder or any folder above it, under any name, that has an `index` (it has
+been used with a work tree) is taken to track the folder it sits in, or its `core.worktree` if it sets
+one; a bare repository with no `index`, such as a mirror or a backup clone, tracks nothing. A store
+inside `$GIT_WORK_TREE`, or inside the `core.worktree` of `$GIT_DIR`, is refused too.
+
+To move the store, set `ASKA_RUNS_DIR` in the environment Claude Code runs in to an absolute path
+outside every git working tree: runs then go in `$ASKA_RUNS_DIR/<id>/`, and `runs list` reads them
+from there. It must be absolute and, if it exists, a folder you own; otherwise `runs new` and
+`runs list` fail with `E_RUNS_DIR`. It's created if missing, kept owner-only and checked by the same
+guard. An empty value counts as unset. Alternatively, move `~/.claude/aska/runs` to a folder outside
+any git working tree and symlink it back at `~/.claude/aska/runs`, or set `PERSONA_HOME` to a home
+outside every git working tree (runs then go in `$PERSONA_HOME/.claude/aska/runs`) — the latter also
+moves your user-scope personas and units, since `PERSONA_HOME` is the CLI's whole home, not just the
+run store. The store and each run folder are owner-only (0700). A run folder kept before 0.6.1 may
 be looser; it's tightened the next time `compare --record` updates it. Nothing prunes them; delete a folder
 to remove a run.
 

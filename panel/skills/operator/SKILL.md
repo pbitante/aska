@@ -23,7 +23,7 @@ Run it from the user's project directory, so that the project scope (`.claude/pe
 | `check-judgment <name> [--file <path>] [--checks <targets.json>]` | validate a judgment against a persona's contract; reads the JSON from `<path>` or stdin; with `--checks`, also check that every target is answered exactly once |
 | `check-evidence [--file <path>]` | validate an investigator's evidence: the four sections `## Checked`, `## Ran`, `## Found` and `## Not determined`, in order, each with content; reads the markdown from `<path>` or stdin |
 | `compare [--file <path>] [--json] [--record]` | compare a panel's judgments (panel-result JSON) and report where they agree, disagree and what to follow up on; reads from `<path>` or stdin; `--record` also updates the kept run's `meta.json` |
-| `runs new` | create a kept panel-run folder in `~/.claude/aska/runs/` and print its path |
+| `runs new` | create a kept panel-run folder in `~/.claude/aska/runs/` (or `$ASKA_RUNS_DIR` when set) and print its path |
 | `runs list [--json]` | list kept panel runs, newest first |
 | `targets --from <file.md> [--out <targets.json>]` | extract a step file's `## Adversarial review targets` as numbered targets (`T1`, `T2.1`, …); exits 1 if the file can't be read or has no such section or no bullets |
 | `gate [<name>] --file <judgment.json> --checks <targets.json> [--json]` | decide a gate judgment as persona `<name>` (default `gate`): `pass` or `pass-with-conditions` (exit 0), or `fail` (exit 1); an unreadable or invalid targets file exits 2 |
