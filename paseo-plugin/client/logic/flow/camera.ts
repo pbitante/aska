@@ -78,6 +78,18 @@ export function scaleLimits(bounds: Bounds, viewport: Viewport): Limits {
   return { min: Math.min(fitScale(bounds, viewport), MIN_SCALE), max: MAX_SCALE };
 }
 
+// ctrl/⌘ + wheel: deltaY in pixels (deltaMode 0), lines (1) or pages (2). A trackpad pinch sends
+// small pixel deltas, which keep exp(−px × WHEEL_GAIN); a mouse notch (~100 px, or 3 lines) is
+// clamped to one ZOOM_STEP, like the + and − buttons.
+export const WHEEL_GAIN = 0.01;
+export const WHEEL_LINE_PX = 16;
+
+export function wheelFactor(deltaY: number, deltaMode: number, pageHeight: number): number {
+  const px = deltaY * (deltaMode === 1 ? WHEEL_LINE_PX : deltaMode === 2 ? pageHeight : 1);
+  if (!Number.isFinite(px)) return 1;
+  return clamp(Math.exp(-px * WHEEL_GAIN), 1 / ZOOM_STEP, ZOOM_STEP);
+}
+
 // Scales about a screen point, keeping the world point under it fixed.
 export function zoomAt(cam: Camera, factor: number, point: XY, limits: Limits): Camera {
   const scale = clamp(cam.scale * factor, limits.min, limits.max);
