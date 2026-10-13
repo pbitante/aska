@@ -14,6 +14,10 @@ import {
   pinch,
   scaleLimits,
   viewEvent,
+  WHEEL_GAIN,
+  WHEEL_LINE_PX,
+  wheelFactor,
+  ZOOM_STEP,
   zoomAt,
   type Bounds,
   type Camera,
@@ -79,6 +83,41 @@ describe("zoom and limits", () => {
   });
   it("hides captions below a 0.6 scale", () => {
     expect(CAPTION_MIN_SCALE).toBe(0.6);
+  });
+});
+
+describe("wheel zoom (#7)", () => {
+  const PAGE = 420;
+  it("normalises deltaY to pixels by deltaMode: pixel, line (16 px) and page (the viewport's height)", () => {
+    expect(wheelFactor(1, 1, PAGE)).toBeCloseTo(wheelFactor(WHEEL_LINE_PX, 0, PAGE), 12);
+    expect(wheelFactor(0.02, 2, PAGE)).toBeCloseTo(wheelFactor(0.02 * PAGE, 0, PAGE), 12);
+    expect(WHEEL_LINE_PX).toBe(16);
+  });
+  it("keeps a small-delta trackpad pinch exactly as it was: exp(−deltaY × 0.01)", () => {
+    expect(WHEEL_GAIN).toBe(0.01);
+    for (const dy of [-10, -4, -1.5, 0.5, 2, 8, 15]) expect(wheelFactor(dy, 0, PAGE)).toBeCloseTo(Math.exp(-dy * 0.01), 12);
+    expect(wheelFactor(0, 0, PAGE)).toBe(1);
+  });
+  it("clamps any one event to one zoom step (±25%), so a 100 px notch zooms like the + and − buttons", () => {
+    expect(ZOOM_STEP).toBe(1.25);
+    expect(wheelFactor(-100, 0, PAGE)).toBeCloseTo(ZOOM_STEP, 12);
+    expect(wheelFactor(100, 0, PAGE)).toBeCloseTo(1 / ZOOM_STEP, 12);
+    expect(wheelFactor(-3, 1, PAGE)).toBeCloseTo(ZOOM_STEP, 12);
+    expect(wheelFactor(1, 2, PAGE)).toBeCloseTo(1 / ZOOM_STEP, 12);
+    for (const dy of [-1e6, -500, -40, 40, 500, 1e6])
+      for (const mode of [0, 1, 2]) {
+        const f = wheelFactor(dy, mode, PAGE);
+        expect(f).toBeLessThanOrEqual(ZOOM_STEP + 1e-12);
+        expect(f).toBeGreaterThanOrEqual(1 / ZOOM_STEP - 1e-12);
+      }
+  });
+  it("zooms in for a negative deltaY and out for a positive one", () => {
+    expect(wheelFactor(-5, 0, PAGE)).toBeGreaterThan(1);
+    expect(wheelFactor(5, 0, PAGE)).toBeLessThan(1);
+  });
+  it("treats an unknown deltaMode as pixels, and a non-finite delta as no zoom", () => {
+    expect(wheelFactor(5, 7, PAGE)).toBe(wheelFactor(5, 0, PAGE));
+    expect(wheelFactor(Number.NaN, 0, PAGE)).toBe(1);
   });
 });
 

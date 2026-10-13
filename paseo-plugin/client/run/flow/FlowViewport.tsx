@@ -8,6 +8,7 @@ import {
   scaleLimits,
   SLOP,
   viewEvent,
+  wheelFactor,
   ZOOM_STEP,
   zoomAt,
   type Bounds,
@@ -34,7 +35,7 @@ const FIT_MS = 300;
 
 // On web, react-native-web's View ref is the element itself. React registers its own wheel
 // listener as passive, so preventDefault() there is ignored; this one is added non-passive.
-type WheelEventLike = { deltaY: number; ctrlKey: boolean; metaKey: boolean; clientX: number; clientY: number; preventDefault: () => void };
+type WheelEventLike = { deltaY: number; deltaMode: number; ctrlKey: boolean; metaKey: boolean; clientX: number; clientY: number; preventDefault: () => void };
 type WheelTarget = {
   addEventListener: (type: "wheel", fn: (e: WheelEventLike) => void, opts: { passive: false }) => void;
   removeEventListener: (type: "wheel", fn: (e: WheelEventLike) => void) => void;
@@ -238,7 +239,7 @@ export function FlowViewport({
       e.preventDefault();
       const r = node.getBoundingClientRect();
       const at = { x: e.clientX - r.left, y: e.clientY - r.top };
-      settle(() => commit({ kind: "user", camera: zoomAt(state.current.camera, Math.exp(-e.deltaY * 0.01), at, scaleLimits(bounds, size)) }, false));
+      settle(() => commit({ kind: "user", camera: zoomAt(state.current.camera, wheelFactor(e.deltaY, e.deltaMode, size.height), at, scaleLimits(bounds, size)) }, false));
     };
     node.addEventListener("wheel", onWheel, { passive: false });
     return () => node.removeEventListener("wheel", onWheel);
